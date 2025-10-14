@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6b4e66e68f0512644803914d2857c8b8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Render Settings/Universal Render.asset
+  uploadId: 776600

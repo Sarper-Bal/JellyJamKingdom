@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b2d44ee563e380546a7e83cc80f2f4aa
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Animations/BonFire.controller
+  uploadId: 776600

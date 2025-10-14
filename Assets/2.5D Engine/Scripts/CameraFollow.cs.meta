@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: beb5f0bbc354f5d449eea8768c752e72
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Scripts/CameraFollow.cs
+  uploadId: 776600

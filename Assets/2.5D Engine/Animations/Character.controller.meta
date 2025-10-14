@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 22545c7435b1b5b498af21fd0674b6f8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Animations/Character.controller
+  uploadId: 776600

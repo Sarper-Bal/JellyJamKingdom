@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 60ec2cb2e5756e84b95f2f41d3656b66
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Animations/Init.anim
+  uploadId: 776600

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4dfe2e61606463c4b9b08e1cf9664324
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Animations/Pedestal Fire.controller
+  uploadId: 776600

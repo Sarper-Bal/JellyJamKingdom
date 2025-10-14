@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7d02299296a2a9843981fe2199b208f1
+timeCreated: 1447019045
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Particle Effects/Projectile Particles/Materials/Wave.mat
+  uploadId: 776600

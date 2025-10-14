@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e7912d15146fcf145afaaedec646b781
+timeCreated: 1519499170
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 314871
+  packageName: 2.5D Engine
+  packageVersion: 1.0.0
+  assetPath: Assets/2.5D Engine/Particle Effects/Projectile Particles/Materials/Explosion.mat
+  uploadId: 776600
