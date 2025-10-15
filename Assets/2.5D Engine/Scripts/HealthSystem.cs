@@ -26,12 +26,6 @@ namespace IndianOceanAssets.Engine2_5D
             // Obje yeniden kullanıldığında canını tekrar maksimuma doldur.
             health = maxHealth;
         }
-        // YENİ FONKSİYON: Bu HealthSystem'i belirli bir can değeriyle başlatır.
-        public void Initialize(int healthValue)
-        {
-            maxHealth = healthValue;
-            health = maxHealth;
-        }
 
         // Initializes health
         private void Start()

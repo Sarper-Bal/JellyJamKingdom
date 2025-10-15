@@ -12,12 +12,11 @@ namespace IndianOceanAssets.Engine2_5D
 
         [SerializeField] private RoundManager roundManager;
 
-        [Header("Dynamic Pooling Settings")]
-        [Tooltip("Otomatik oluşturulan havuzların başlangıç boyutu.")]
-        [SerializeField] private int defaultPoolSize = 10;
-
         private Dictionary<int, EnemySpawnPoint> spawnPoints = new Dictionary<int, EnemySpawnPoint>();
+
+        // YENİ: Her bir spawn olayının bir sonraki tetiklenme zamanını takip eden liste.
         private List<float> nextEventTriggerTimes;
+
         private int currentWaveIndex = 0;
         private bool waveActive = false;
 
@@ -38,17 +37,23 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Update()
         {
-            if (!waveActive || !roundManager.IsRoundActive || waves.Count == 0)
+            // Tur veya dalga aktif değilse hiçbir şey yapma.
+            if (!waveActive || !roundManager.IsRoundActive)
             {
                 return;
             }
 
+            // Aktif dalganın içindeki her bir olayı kontrol et.
             WaveProfile currentWave = waves[currentWaveIndex - 1];
             for (int i = 0; i < currentWave.spawnEvents.Count; i++)
             {
+                // Ana saat, bu olayın sıradaki tetiklenme zamanını geçti mi?
                 if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
                 {
+                    // Geçtiyse: Bir düşman "patlaması" başlat.
                     StartCoroutine(SpawnBurst(currentWave.spawnEvents[i]));
+
+                    // VE en önemlisi: Bir sonraki tetiklenme zamanını şimdi hesapla.
                     nextEventTriggerTimes[i] += currentWave.spawnEvents[i].startDelay;
                 }
             }
@@ -58,15 +63,14 @@ namespace IndianOceanAssets.Engine2_5D
         {
             if (waves != null && waves.Count > currentWaveIndex)
             {
-                Debug.Log($"Dalga {currentWaveIndex + 1} hazırlanıyor ve başlıyor!");
+                Debug.Log($"Dalga {currentWaveIndex + 1} başlıyor!");
                 WaveProfile currentWave = waves[currentWaveIndex];
 
-                // YENİ MANTIK: Dalgayı başlatmadan önce havuzları hazırla.
-                PreparePoolsForWave(currentWave);
-
+                // Zaman takip listesini sıfırla ve ilk tetiklenme zamanlarını ayarla.
                 nextEventTriggerTimes = new List<float>();
                 foreach (var spawnEvent in currentWave.spawnEvents)
                 {
+                    // Her olayın ilk tetiklenme zamanı, kendi gecikmesidir.
                     nextEventTriggerTimes.Add(spawnEvent.startDelay);
                 }
 
@@ -80,34 +84,20 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // YENİ FONKSİYON: Bir dalga için gerekli havuzları otomatik olarak oluşturan fonksiyon.
-        private void PreparePoolsForWave(WaveProfile wave)
-        {
-            foreach (var spawnEvent in wave.spawnEvents)
-            {
-                // Gerekli bilgiler var mı kontrol et.
-                if (spawnEvent.enemyPrefab != null && !string.IsNullOrEmpty(spawnEvent.poolTag))
-                {
-                    // ObjectPooler'a git ve bu havuzu oluşturmasını iste.
-                    // Havuz zaten varsa, ObjectPooler'daki mantığımız sayesinde tekrar oluşturulmayacak.
-                    ObjectPooler.Instance.CreatePool(spawnEvent.poolTag, spawnEvent.enemyPrefab, defaultPoolSize, true);
-                }
-            }
-        }
-
+        // YENİ: Bir "patlama" (burst) şeklinde düşman spawn eden Coroutine.
         private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
         {
             if (!spawnPoints.ContainsKey(spawnEvent.spawnPointID))
             {
                 Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı!");
-                yield break;
+                yield break; // Coroutine'i sonlandır.
             }
 
             EnemySpawnPoint spawnPoint = spawnPoints[spawnEvent.spawnPointID];
 
             for (int i = 0; i < spawnEvent.count; i++)
             {
-                ObjectPooler.Instance.SpawnFromPool(spawnEvent.poolTag, spawnPoint.transform.position, Quaternion.identity);
+                ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
                 yield return new WaitForSeconds(spawnEvent.spawnInterval);
             }
         }
