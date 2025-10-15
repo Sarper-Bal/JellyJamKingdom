@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5246406977990302780}
   - component: {fileID: 9038221145594094663}
   - component: {fileID: -4485983452498989191}
+  - component: {fileID: 2340709853880498097}
   m_Layer: 0
   m_Name: Enemy Death Effect
   m_TagString: Untagged
@@ -4902,7 +4903,7 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: e7d58f631e83cf840bb7cf6c2ddb98cf, type: 3}
+  m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: e7d58f631e83cf840bb7cf6c2ddb98cf, type: 3}
   m_PlayOnAwake: 1
   m_Volume: 1
@@ -4989,3 +4990,15 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &2340709853880498097
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4806121257990350900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ef180f24e55f44678084d630a93ea24, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

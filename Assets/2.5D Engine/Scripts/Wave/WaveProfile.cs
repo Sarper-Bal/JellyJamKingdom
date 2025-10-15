@@ -12,7 +12,7 @@ public class SpawnEvent
     [Tooltip("Bu olayın hangi Spawn Point ID'sinde gerçekleşeceği.")]
     public int spawnPointID;
 
-    [Tooltip("Dalga başladıktan kaç saniye sonra bu olayın tetikleneceği.")]
+    [Tooltip("Bu olayın periyodik olarak tetiklenme aralığı (saniye). İlk tetiklenme de bu saniyede olur.")]
     public float startDelay;
 
     [Tooltip("Bu olayda toplam kaç düşman spawn edileceği.")]
