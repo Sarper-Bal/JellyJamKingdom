@@ -7883,6 +7883,63 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6444938042820886462, guid: f2b8aff49d530b342a2ffc42b69e5b48, type: 3}
   m_PrefabInstance: {fileID: 754682787}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1592796604
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1592796606}
+  - component: {fileID: 1592796605}
+  m_Layer: 0
+  m_Name: ObjectPooler
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1592796605
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1592796604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6d9d4be7b35a4624870b88a60a29e97, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pools:
+  - tag: enemy
+    prefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+    size: 50
+  - tag: explosion
+    prefab: {fileID: 5745667949009842635, guid: f00c38ffa516d9b4d9e593f809bbf9df, type: 3}
+    size: 100
+  - tag: enemyDeath
+    prefab: {fileID: 4806121257990350900, guid: 8ba56a88eb8db7342a07b8f07085b2f8, type: 3}
+    size: 50
+  - tag: projectile
+    prefab: {fileID: 2829856321817114063, guid: 51777ba2ecd6fed45a171d318a10cc3e, type: 3}
+    size: 50
+--- !u!4 &1592796606
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1592796604}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1615186697 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1978736594686439443, guid: bdef0bd16bba97a4a8261c3965f1e1e6, type: 3}
@@ -10518,6 +10575,7 @@ SceneRoots:
   - {fileID: 1254251011}
   - {fileID: 1979538492}
   - {fileID: 990297988}
+  - {fileID: 1592796606}
   - {fileID: 1208334975}
   - {fileID: 2034613986}
   - {fileID: 609152702}

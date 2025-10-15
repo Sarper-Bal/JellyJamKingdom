@@ -97,7 +97,7 @@ namespace IndianOceanAssets.Engine2_5D
 
             for (int i = 0; i < spawnEvent.count; i++)
             {
-                Instantiate(spawnEvent.enemyPrefab, spawnPoint.transform.position, Quaternion.identity);
+                ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
                 yield return new WaitForSeconds(spawnEvent.spawnInterval);
             }
         }

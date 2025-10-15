@@ -1,45 +1,47 @@
 using UnityEngine;
+
 namespace IndianOceanAssets.Engine2_5D
 {
-    // Handles projectile movement, explosion, and effects
-    public class Projectile : MonoBehaviour
+    // YENİ: IPooledObject arayüzünü uyguluyoruz.
+    public class Projectile : MonoBehaviour, IPooledObject
     {
-        public float speed = 10f; // Projectile speed
-        public GameObject explosionEffect; // Effect prefab
-        private Vector3 target; // Target position
+        public float speed = 10f;
+        private Vector3 target;
 
         [Range(.2f, 3f)]
-        public float radius = 1f; // Explosion radius
-        public LayerMask whatIsEnemy; // Layer for enemies
-        public LayerMask whatIsPlant; // Layer for plants
+        public float radius = 1f;
+        public LayerMask whatIsEnemy;
+        public LayerMask whatIsPlant;
 
-        // Sets the target point and rotates projectile to face it
+        // YENİ: IPooledObject'ten gelen özellikler.
+        public string PoolTag { get; set; }
+        public void OnObjectSpawn()
+        {
+            // Mermi her spawn olduğunda yapılacak bir şey varsa buraya yazılır.
+            // Şimdilik boş bırakabiliriz.
+        }
+
         public void SetTarget(Vector3 point)
         {
             target = point;
-            transform.LookAt(new Vector3(point.x, transform.position.y, point.z)); // Optional: face target
+            transform.LookAt(new Vector3(point.x, transform.position.y, point.z));
         }
 
-        // Moves projectile towards target each frame
         void Update()
         {
             transform.position = Vector3.MoveTowards(transform.position, target, speed * Time.deltaTime);
 
-            // Explode if close to target
             if (Vector3.Distance(transform.position, target) < 0.1f)
             {
                 Explode();
             }
         }
 
-        // Handles explosion logic and effects
         void Explode()
         {
-            Instantiate(explosionEffect, transform.position, Quaternion.identity);
+            ObjectPooler.Instance.SpawnFromPool("explosion", transform.position, Quaternion.identity);
 
-            // Damage enemies in radius
             Collider[] enemyColliders = Physics.OverlapSphere(transform.position, radius, whatIsEnemy);
-
             if (enemyColliders != null)
             {
                 foreach (Collider C in enemyColliders)
@@ -48,9 +50,7 @@ namespace IndianOceanAssets.Engine2_5D
                 }
             }
 
-            // Affect plants in radius
             Collider[] plantationColliders = Physics.OverlapSphere(transform.position, radius, whatIsPlant);
-
             if (plantationColliders != null)
             {
                 foreach (Collider C in plantationColliders)
@@ -58,7 +58,9 @@ namespace IndianOceanAssets.Engine2_5D
                     C.GetComponent<Plantation>().Cut();
                 }
             }
-            Destroy(gameObject); // Destroy projectile
+
+            // YENİ: Kendini yok etmek yerine, kendi etiketiyle havuza geri dön.
+            ObjectPooler.Instance.ReturnToPool(PoolTag, gameObject);
         }
     }
 }

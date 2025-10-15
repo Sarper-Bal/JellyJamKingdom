@@ -9,9 +9,15 @@ namespace IndianOceanAssets.Engine2_5D
 
         public void FireAtPoint(Vector3 targetPoint)
         {
-            GameObject projectile = Instantiate(projectilePrefab, transform.position, Quaternion.identity);
-            projectile.GetComponent<Projectile>().SetTarget(targetPoint);
-            FlipTowards(targetPoint);
+            // ESKİ: GameObject projectile = Instantiate(projectilePrefab, transform.position, Quaternion.identity);
+            // YENİ:
+            GameObject projectile = ObjectPooler.Instance.SpawnFromPool("projectile", transform.position, Quaternion.identity);
+
+            if (projectile != null)
+            {
+                projectile.GetComponent<Projectile>().SetTarget(targetPoint);
+                FlipTowards(targetPoint);
+            }
         }
 
         private void FlipTowards(Vector3 target)
