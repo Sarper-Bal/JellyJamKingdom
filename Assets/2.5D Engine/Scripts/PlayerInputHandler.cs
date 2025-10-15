@@ -37,7 +37,7 @@ public class PlayerInputHandler : MonoBehaviour
             MoveInput = moveAction.ReadValue<Vector2>();
 
             // YENİ EKLENEN SATIR: Joystick'ten gelen veriyi konsola yazdır.
-            Debug.Log("Joystick Verisi: " + MoveInput);
+            //Debug.Log("Joystick Verisi: " + MoveInput);
         }
     }
 }
