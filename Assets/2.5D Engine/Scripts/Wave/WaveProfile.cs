@@ -20,6 +20,8 @@ public class SpawnEvent
 
     [Tooltip("Her bir düşmanın spawn olması arasında geçecek saniye.")]
     public float spawnInterval;
+    [Tooltip("ObjectPooler'da bu düşmanı çağırmak için kullanılacak etiket.")]
+    public string poolTag;
 }
 
 // Bu ScriptableObject, bir saldırı dalgasının tamamını tanımlar.

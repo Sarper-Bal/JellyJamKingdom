@@ -13,18 +13,15 @@ MonoBehaviour:
   m_Name: Dalga 1
   m_EditorClassIdentifier: 
   spawnEvents:
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+  - enemyPrefab: {fileID: 2150025513644625521, guid: cc66dceab1ac6411fa6ba104332eec7c, type: 3}
     spawnPointID: 1
     startDelay: 10
     count: 2
     spawnInterval: 1
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+    poolTag: goblin
+  - enemyPrefab: {fileID: 2150025513644625521, guid: b6d665c5ff2d94bbfaaca9cfe0d07dcd, type: 3}
     spawnPointID: 0
-    startDelay: 2
-    count: 1
-    spawnInterval: 1
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
-    spawnPointID: 2
     startDelay: 5
     count: 2
     spawnInterval: 1
+    poolTag: brute
