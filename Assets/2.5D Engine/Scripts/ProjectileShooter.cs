@@ -5,12 +5,13 @@ namespace IndianOceanAssets.Engine2_5D
     public class ProjectileShooter : MonoBehaviour
     {
         [SerializeField] private GameObject projectilePrefab; // Prefab for the projectile to shoot
-        [SerializeField] private KeyCode attackKeyCode; // Key to trigger shooting
+                                                              // [SerializeField] private KeyCode attackKeyCode; // Key to trigger shooting
         [SerializeField] private LayerMask groundLayer; // Layer to detect ground for aiming
 
         // Called once per frame
         void Update()
         {
+            /* ŞİMDİLİK DEVRE DIŞI
             // Check if attack key is pressed
             if (Input.GetKeyDown(attackKeyCode)) // Left-click
             {
@@ -33,6 +34,7 @@ namespace IndianOceanAssets.Engine2_5D
                         transform.localScale = new Vector3(-1, 1, 1);
                 }
             }
+            */
         }
     }
 }

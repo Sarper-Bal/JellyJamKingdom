@@ -1,41 +1,49 @@
 using UnityEngine;
 using System.Collections;
+using DG.Tweening;
 
 namespace IndianOceanAssets.Engine2_5D
 {
-    // Ensures the GameObject has these essential components
-    [RequireComponent(typeof(HealthSystem), typeof(SwordAttack), typeof(ProjectileShooter))]
+    // HATA 1 DÜZELTMESİ: Her bileşen için ayrı bir RequireComponent satırı eklendi.
+    [RequireComponent(typeof(HealthSystem))]
+    [RequireComponent(typeof(SwordAttack))]
+    [RequireComponent(typeof(ProjectileShooter))]
+    [RequireComponent(typeof(PlayerInputHandler))]
     public class PlayerController : MonoBehaviour
     {
         [Header("Movement")]
-        [SerializeField] private float moveSpeed = 5f;         // Speed at which the player moves
-        [SerializeField] private float rollForce = 8f;         // Force applied during roll
-        [SerializeField] private float rollCooldown = 1f;      // Cooldown time between rolls
+        [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private float rollForce = 8f;
+        [SerializeField] private float rollCooldown = 1f;
 
-        private Rigidbody rb;                                  // Rigidbody reference for physics
-        private Animator animator;                             // Animator reference for animations
-        private Vector2 inputDirection;                        // Stores player input direction
-        private float lastRollTime;                            // Timestamp of last roll
-        private bool isRolling;                                // Is player currently rolling?
+        private Rigidbody rb;
+        private Animator animator;
+        private PlayerInputHandler inputHandler;
 
-        [SerializeField] private KeyCode rollKeyCode;          // Key to trigger roll
+        private Vector2 inputDirection;
+        private float lastRollTime;
+        private bool isRolling;
 
-        // Enum to switch between sword or projectile attack types
-        [SerializeField] private enum AttackType
+        // Enum tanımı başlık olmadan, kendi başına durmalı.
+        private enum AttackType
         {
             SwordSlash, ProjectileShoot
         }
 
-        [SerializeField] private AttackType attackType;        // Current selected attack type
+        // HATA 2 DÜZELTMESİ: Header, ait olduğu değişkenin hemen üzerine taşındı.
+        [Header("Attack Settings")]
+        [SerializeField] private AttackType attackType;
+
+        private void Awake()
+        {
+            rb = GetComponent<Rigidbody>();
+            animator = GetComponent<Animator>();
+            inputHandler = GetComponent<PlayerInputHandler>();
+            Application.targetFrameRate = 60;
+        }
 
         private void Start()
         {
-            Application.targetFrameRate = 60; // Set target frame rate
-
-            rb = GetComponent<Rigidbody>();
-            animator = GetComponent<Animator>();
-
-            // Enable only the selected attack script
             if (attackType == AttackType.SwordSlash)
                 GetComponent<SwordAttack>().enabled = true;
             else
@@ -44,59 +52,55 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Update()
         {
-            HandleInput(); // Read movement input
-
-            // Animate movement only when not rolling
+            inputDirection = inputHandler.MoveInput;
             if (!isRolling)
+            {
                 AnimateMovement();
-
-            // Trigger roll if key is pressed and cooldown passed
-            if (Input.GetKeyDown(rollKeyCode) && Time.time > lastRollTime + rollCooldown)
-                StartCoroutine(PerformRoll());
+                FlipCharacter();
+            }
         }
 
         private void FixedUpdate()
         {
-            // Move only if not rolling
             if (!isRolling)
                 Move();
         }
 
-        // Reads directional input from keyboard
-        private void HandleInput()
-        {
-            inputDirection = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")).normalized;
-        }
-
-        // Applies movement to the Rigidbody based on input
         private void Move()
         {
             Vector3 movement = new Vector3(inputDirection.x, 0f, inputDirection.y) * moveSpeed * Time.fixedDeltaTime;
             rb.MovePosition(rb.position + movement);
         }
 
-        // Sets the "Run" animation based on movement input
         private void AnimateMovement()
         {
             animator.SetBool("Run", inputDirection != Vector2.zero);
         }
 
-        // Coroutine to perform roll movement and animation
+        private void FlipCharacter()
+        {
+            if (Mathf.Abs(inputDirection.x) > 0.1f)
+            {
+                float newScaleX = Mathf.Sign(inputDirection.x);
+                transform.localScale = new Vector3(newScaleX, 1, 1);
+            }
+        }
+
         private IEnumerator PerformRoll()
         {
             isRolling = true;
             lastRollTime = Time.time;
-
-            float timer = 0.2f;
             Vector3 rollDir = new Vector3(inputDirection.x, 0f, inputDirection.y).normalized;
 
-            // Move the player during the roll duration
-            while (timer > 0f)
+            if (rollDir == Vector3.zero)
             {
-                rb.MovePosition(rb.position + rollDir * rollForce * Time.fixedDeltaTime);
-                timer -= Time.fixedDeltaTime;
-                yield return new WaitForFixedUpdate();
+                rollDir = new Vector3(transform.localScale.x, 0, 0);
             }
+
+            float rollDuration = 0.3f;
+            rb.DOMove(rb.position + rollDir * rollForce, rollDuration).SetEase(Ease.OutQuad);
+
+            yield return new WaitForSeconds(rollDuration);
 
             isRolling = false;
         }
