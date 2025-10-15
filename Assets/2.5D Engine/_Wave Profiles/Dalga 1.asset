@@ -15,11 +15,16 @@ MonoBehaviour:
   spawnEvents:
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 1
-    startDelay: 5
+    startDelay: 10
     count: 2
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 0
-    startDelay: 10
+    startDelay: 2
+    count: 1
+    spawnInterval: 1
+  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+    spawnPointID: 2
+    startDelay: 5
     count: 2
     spawnInterval: 1
