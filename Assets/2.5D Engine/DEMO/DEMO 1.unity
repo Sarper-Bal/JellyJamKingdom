@@ -786,6 +786,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7107154609808163723, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1110037798}
+    - targetCorrespondingSourceObject: {fileID: 7107154609808163723, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1110037807}
   m_SourcePrefab: {fileID: 100100000, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
 --- !u!1001 &224836309
 PrefabInstance:
@@ -5451,6 +5454,21 @@ MonoBehaviour:
   m_DefaultActionMap: Player
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
+--- !u!114 &1110037807
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1110037790}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d27f456763f174ea0b008811ba59697c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  attackRange: 5
+  fireRate: 1
+  targetSearchFrequency: 4
 --- !u!1001 &1110302571
 PrefabInstance:
   m_ObjectHideFlags: 0

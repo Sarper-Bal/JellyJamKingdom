@@ -23,6 +23,7 @@ namespace IndianOceanAssets.Engine2_5D
         private Vector2 inputDirection;
         private float lastRollTime;
         private bool isRolling;
+        public bool IsMoving { get; private set; }
 
         // Enum tanımı başlık olmadan, kendi başına durmalı.
         private enum AttackType
@@ -53,8 +54,14 @@ namespace IndianOceanAssets.Engine2_5D
         private void Update()
         {
             inputDirection = inputHandler.MoveInput;
+
+            // YENİ EKLENEN SATIR: Hareket girdisi varsa IsMoving true, yoksa false olacak.
+            IsMoving = inputDirection != Vector2.zero;
+
             if (!isRolling)
             {
+                // AnimateMovement içindeki kontrolü değiştirdiğimiz için artık buna gerek yok.
+                // animator.SetBool("Run", IsMoving); // Bu satırı silebiliriz veya yorum yapabiliriz.
                 AnimateMovement();
                 FlipCharacter();
             }
@@ -74,7 +81,8 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void AnimateMovement()
         {
-            animator.SetBool("Run", inputDirection != Vector2.zero);
+            //animator.SetBool("Run", inputDirection != Vector2.zero);
+            animator.SetBool("Run", IsMoving);
         }
 
         private void FlipCharacter()
