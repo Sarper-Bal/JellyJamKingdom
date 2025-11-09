@@ -14,17 +14,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spawnEvents:
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
-    spawnPointID: 1
-    startDelay: 10
-    count: 2
+    spawnPointID: 0
+    triggerTime: 0
+    isPeriodic: 0
+    repeatInterval: 0
+    count: 1
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
-    spawnPointID: 0
-    startDelay: 2
+    spawnPointID: 1
+    triggerTime: 7
+    isPeriodic: 1
+    repeatInterval: 5
     count: 1
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 2
-    startDelay: 8
+    triggerTime: 3
+    isPeriodic: 0
+    repeatInterval: 0
     count: 2
     spawnInterval: 1

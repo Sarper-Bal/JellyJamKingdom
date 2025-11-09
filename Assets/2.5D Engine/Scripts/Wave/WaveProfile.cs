@@ -1,21 +1,31 @@
 using UnityEngine;
-using System.Collections.Generic; // Listeleri kullanabilmek için bu satır gerekli.
+// Listeleri kullanabilmek için bu satır gerekli.
+using System.Collections.Generic; 
 
 // Bu sınıf, bir dalga içindeki tek bir spawn olayını tanımlar.
 // [System.Serializable] sayesinde bu sınıfın değişkenlerini Unity Inspector'da görebileceğiz.
 [System.Serializable]
 public class SpawnEvent
 {
-    [Tooltip("Bu olayda hangi düşman prefab'ının spawn olacağı.")]
+    [Tooltip("Bu olayda hangi düşman prefab'ının spawn olacağı. (Şu an için 'enemy' tag'i kullanılıyor, ileride bu prefab'a özel spawn eklenebilir)")]
     public GameObject enemyPrefab;
 
     [Tooltip("Bu olayın hangi Spawn Point ID'sinde gerçekleşeceği.")]
     public int spawnPointID;
 
-    [Tooltip("Bu olayın periyodik olarak tetiklenme aralığı (saniye). İlk tetiklenme de bu saniyede olur.")]
-    public float startDelay;
+    // --- DEĞİŞİKLİK BAŞLANGICI ---
+    // 'startDelay' değişkenini daha net bir isimlendirme olan 'triggerTime' ile değiştirdik.
+    [Tooltip("Bu olayın İLK defa tetikleneceği saniye (Round başından itibaren).")]
+    public float triggerTime; // Eski adı: startDelay
 
-    [Tooltip("Bu olayda toplam kaç düşman spawn edileceği.")]
+    [Tooltip("Bu olay periyodik olarak tekrarlanacak mı? (İşaretlenmezse, 'triggerTime'da sadece 1 kez çalışır).")]
+    public bool isPeriodic; // YENİ: Tek seferlik olaylar için eklendi.
+
+    [Tooltip("EĞER periyodik ise, kaç saniyede bir tekrarlanacağı. (isPeriodic false ise bu dikkate alınmaz).")]
+    public float repeatInterval; // YENİ: Periyodik olayların aralığı için eklendi.
+    // --- DEĞİŞİKLİK SONU ---
+
+    [Tooltip("Bu olayda (her tetiklendiğinde) toplam kaç düşman spawn edileceği.")]
     public int count;
 
     [Tooltip("Her bir düşmanın spawn olması arasında geçecek saniye.")]

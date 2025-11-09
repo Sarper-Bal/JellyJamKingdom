@@ -12,9 +12,10 @@ namespace IndianOceanAssets.Engine2_5D
 
         [SerializeField] private RoundManager roundManager;
 
+        // Sahnedeki spawn noktalarını ID ile hızlıca bulmak için bir sözlük (Dictionary).
         private Dictionary<int, EnemySpawnPoint> spawnPoints = new Dictionary<int, EnemySpawnPoint>();
 
-        // YENİ: Her bir spawn olayının bir sonraki tetiklenme zamanını takip eden liste.
+        // Her bir spawn olayının bir sonraki tetiklenme zamanını takip eden liste.
         private List<float> nextEventTriggerTimes;
 
         private int currentWaveIndex = 0;
@@ -22,6 +23,7 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Awake()
         {
+            // Sahnedeki tüm spawn noktalarını bul ve ID'lerini anahtar olarak kullanarak sözlüğe ekle.
             spawnPoints = FindObjectsOfType<EnemySpawnPoint>().ToDictionary(sp => sp.spawnPointID);
         }
 
@@ -29,9 +31,11 @@ namespace IndianOceanAssets.Engine2_5D
         {
             if (roundManager == null)
             {
+                // RoundManager'ı sahnede bul (eğer Inspector'dan atanmadıysa).
                 roundManager = FindObjectOfType<RoundManager>();
             }
 
+            // İlk dalgayı başlat.
             StartNextWave();
         }
 
@@ -43,19 +47,40 @@ namespace IndianOceanAssets.Engine2_5D
                 return;
             }
 
-            // Aktif dalganın içindeki her bir olayı kontrol et.
+            // Mevcut dalga profilini al.
             WaveProfile currentWave = waves[currentWaveIndex - 1];
+
+            // Aktif dalganın içindeki her bir olayı kontrol et.
             for (int i = 0; i < currentWave.spawnEvents.Count; i++)
             {
-                // Ana saat, bu olayın sıradaki tetiklenme zamanını geçti mi?
+                // --- DEĞİŞİKLİK BAŞLANGICI: Spawn Tetikleme Mantığı ---
+
+                // Ana saat (TimeElapsed), bu olayın sıradaki tetiklenme zamanını (nextEventTriggerTimes[i]) geçti mi?
                 if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
                 {
-                    // Geçtiyse: Bir düşman "patlaması" başlat.
-                    StartCoroutine(SpawnBurst(currentWave.spawnEvents[i]));
+                    // Zamanı gelen olayın referansını al
+                    SpawnEvent currentEvent = currentWave.spawnEvents[i];
 
-                    // VE en önemlisi: Bir sonraki tetiklenme zamanını şimdi hesapla.
-                    nextEventTriggerTimes[i] += currentWave.spawnEvents[i].startDelay;
+                    // Geçtiyse: Bir düşman "patlaması" (burst) başlat.
+                    StartCoroutine(SpawnBurst(currentEvent));
+
+                    // Şimdi bir sonraki tetiklenme zamanını hesapla
+                    if (currentEvent.isPeriodic)
+                    {
+                        // EĞER BU PERİYODİK BİR OLAYSA (eski sistem gibi):
+                        // Bir sonraki tetiklenme zamanını 'repeatInterval' kullanarak ayarla.
+                        // (Eğer repeatInterval 0 ise, bir sonraki frame tekrar tetiklenir, dikkatli kullanılmalı)
+                        nextEventTriggerTimes[i] += currentEvent.repeatInterval;
+                    }
+                    else
+                    {
+                        // EĞER BU TEK SEFERLİK BİR OLAYSA (yeni özellik):
+                        // Bir daha tetiklenmemesi için bir sonraki tetiklenme zamanını
+                        // ulaşılamaz bir değere (float.MaxValue veya Mathf.Infinity) ayarla.
+                        nextEventTriggerTimes[i] = Mathf.Infinity;
+                    }
                 }
+                // --- DEĞİŞİKLİK SONU ---
             }
         }
 
@@ -68,11 +93,15 @@ namespace IndianOceanAssets.Engine2_5D
 
                 // Zaman takip listesini sıfırla ve ilk tetiklenme zamanlarını ayarla.
                 nextEventTriggerTimes = new List<float>();
+
+                // --- DEĞİŞİKLİK BAŞLANGICI: İlk Tetiklenme Zamanı Ayarı ---
                 foreach (var spawnEvent in currentWave.spawnEvents)
                 {
-                    // Her olayın ilk tetiklenme zamanı, kendi gecikmesidir.
-                    nextEventTriggerTimes.Add(spawnEvent.startDelay);
+                    // Her olayın ilk tetiklenme zamanı, artık 'startDelay' değil, 'triggerTime' olacak.
+                    // Bu sayede olay 5. saniyede de başlasa, 20. saniyede de başlasa doğru zamanda tetiklenecek.
+                    nextEventTriggerTimes.Add(spawnEvent.triggerTime);
                 }
+                // --- DEĞİŞİKLİK SONU ---
 
                 currentWaveIndex++;
                 waveActive = true;
@@ -84,20 +113,29 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // YENİ: Bir "patlama" (burst) şeklinde düşman spawn eden Coroutine.
+        // Bir "patlama" (burst) şeklinde düşman spawn eden Coroutine.
         private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
         {
+            // Belirtilen ID'de bir spawn noktası var mı kontrol et.
             if (!spawnPoints.ContainsKey(spawnEvent.spawnPointID))
             {
-                Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı!");
+                Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı! Düşman spawn edilemiyor.");
                 yield break; // Coroutine'i sonlandır.
             }
 
+            // Doğru spawn noktasını sözlükten al.
             EnemySpawnPoint spawnPoint = spawnPoints[spawnEvent.spawnPointID];
 
+            // Olayın 'count' (adet) değeri kadar döngüye gir.
             for (int i = 0; i < spawnEvent.count; i++)
             {
+                // ObjectPooler'dan "enemy" etiketli bir düşman çağır.
+                // NOT: Gelecekte, farklı düşman türleri için `spawnEvent.enemyPrefab`'ı kullanarak
+                // ObjectPooler'dan "enemy_boss", "enemy_fast" gibi farklı tag'ler isteyebiliriz.
+                // Şimdilik mevcut "enemy" tag'ini kullanan sistemi koruyoruz.
                 ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
+                
+                // İki düşman arasında 'spawnInterval' kadar bekle (eğer 0 değilse).
                 yield return new WaitForSeconds(spawnEvent.spawnInterval);
             }
         }
