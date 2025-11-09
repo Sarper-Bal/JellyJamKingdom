@@ -5,11 +5,20 @@ namespace IndianOceanAssets.Engine2_5D
     // YENİ: IPooledObject arayüzünü uyguluyoruz.
     public class Projectile : MonoBehaviour, IPooledObject
     {
-        public float speed = 10f;
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        // Merminin kendi stat değişkenlerini kaldırıyoruz.
+        // public float speed = 10f; // ESKİ: Kaldırıldı
+        // public float radius = 1f; // ESKİ: Kaldırıldı
+
+        // YENİ: Merminin bu "yaşam döngüsündeki" hız ve yarıçap değerleri.
+        // Bu değerler ProjectileShooter tarafından atanacak.
+        private float currentSpeed;
+        private float currentRadius;
+        // --- DEĞİŞİKLİK SONU ---
+
         private Vector3 target;
 
-        [Range(.2f, 3f)]
-        public float radius = 1f;
+        [Header("Collision Layers")]
         public LayerMask whatIsEnemy;
         public LayerMask whatIsPlant;
 
@@ -18,19 +27,31 @@ namespace IndianOceanAssets.Engine2_5D
         public void OnObjectSpawn()
         {
             // Mermi her spawn olduğunda yapılacak bir şey varsa buraya yazılır.
-            // Şimdilik boş bırakabiliriz.
+            // Stat'lar 'Initialize' ile ayarlandığı için burası şimdilik boş.
+        }
+
+        // --- YENİ FONKSİYON ---
+        // Bu fonksiyon, mermiyi spawn eden 'ProjectileShooter' tarafından çağırılır.
+        // Mermiye bu yaşam döngüsünde hangi stat'ları kullanacağını söyler.
+        public void Initialize(float speed, float radius)
+        {
+            this.currentSpeed = speed;
+            this.currentRadius = radius;
         }
 
         public void SetTarget(Vector3 point)
         {
             target = point;
+            // Hedefe doğru dön (sadece Y ekseninde)
             transform.LookAt(new Vector3(point.x, transform.position.y, point.z));
         }
 
         void Update()
         {
-            transform.position = Vector3.MoveTowards(transform.position, target, speed * Time.deltaTime);
+            // --- DEĞİŞİKLİK: 'speed' yerine 'currentSpeed' kullan ---
+            transform.position = Vector3.MoveTowards(transform.position, target, currentSpeed * Time.deltaTime);
 
+            // Hedefe yeterince yaklaştıysak patla
             if (Vector3.Distance(transform.position, target) < 0.1f)
             {
                 Explode();
@@ -39,18 +60,24 @@ namespace IndianOceanAssets.Engine2_5D
 
         void Explode()
         {
+            // Patlama efektini havuzdan çağır
             ObjectPooler.Instance.SpawnFromPool("explosion", transform.position, Quaternion.identity);
 
-            Collider[] enemyColliders = Physics.OverlapSphere(transform.position, radius, whatIsEnemy);
+            // --- DEĞİŞİKLİK: 'radius' yerine 'currentRadius' kullan ---
+            // 'currentRadius' içindeki Düşmanları bul
+            Collider[] enemyColliders = Physics.OverlapSphere(transform.position, currentRadius, whatIsEnemy);
             if (enemyColliders != null)
             {
                 foreach (Collider C in enemyColliders)
                 {
+                    // Düşmanlara 'Die' (Öl) komutu ver
                     C.GetComponent<HealthSystem>().Die();
                 }
             }
 
-            Collider[] plantationColliders = Physics.OverlapSphere(transform.position, radius, whatIsPlant);
+            // --- DEĞİŞİKLİK: 'radius' yerine 'currentRadius' kullan ---
+            // 'currentRadius' içindeki Bitkileri bul
+            Collider[] plantationColliders = Physics.OverlapSphere(transform.position, currentRadius, whatIsPlant);
             if (plantationColliders != null)
             {
                 foreach (Collider C in plantationColliders)
