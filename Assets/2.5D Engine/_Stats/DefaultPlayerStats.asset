@@ -16,5 +16,6 @@ MonoBehaviour:
   rollForce: 8
   rollCooldown: 1
   maxHealth: 100
-  projectileSpeed: 5
+  projectileSpeed: 10
   projectileRadius: 1
+  attackSpeed: 1

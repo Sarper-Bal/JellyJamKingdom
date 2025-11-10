@@ -3,15 +3,18 @@ using UnityEngine;
 namespace IndianOceanAssets.Engine2_5D
 {
     // Bu script'in çalışması için diğer Player bileşenlerine ihtiyaç duyduğunu belirtiyoruz.
-    [RequireComponent(typeof(PlayerController), typeof(ProjectileShooter))]
+    // --- YENİ EKLENTİ: PlayerStats component'ini zorunlu kıl ---
+    [RequireComponent(typeof(PlayerController), typeof(ProjectileShooter), typeof(PlayerStats))]
     public class AutoAttack : MonoBehaviour
     {
         [Header("Attack Settings")]
         [Tooltip("Ateş etme menzili")]
         [SerializeField] private float attackRange = 10f;
 
-        [Tooltip("İki atış arasındaki saniye cinsinden bekleme süresi")]
-        [SerializeField] private float fireRate = 0.5f;
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        // [Tooltip("İki atış arasındaki saniye cinsinden bekleme süresi")]
+        // [SerializeField] private float fireRate = 0.5f; // ESKİ: Kaldırıldı. Artık PlayerStats'tan gelecek.
+        // --- DEĞİŞİKLİK SONU ---
 
         [Header("Optimization")]
         [Tooltip("Saniyede kaç kez hedef aranacağını belirler. Performans için önemlidir.")]
@@ -21,6 +24,9 @@ namespace IndianOceanAssets.Engine2_5D
         private PlayerController playerController;
         private ProjectileShooter projectileShooter;
         private Transform currentTarget;
+        
+        // --- YENİ EKLENTİ: PlayerStats referansı ---
+        private PlayerStats playerStats;
 
         // Zamanlayıcılar
         private float nextFireTime;
@@ -31,6 +37,9 @@ namespace IndianOceanAssets.Engine2_5D
             // Gerekli bileşenleri en başta alıyoruz.
             playerController = GetComponent<PlayerController>();
             projectileShooter = GetComponent<ProjectileShooter>();
+            
+            // --- YENİ EKLENTİ: PlayerStats component'ini al ---
+            playerStats = GetComponent<PlayerStats>();
         }
 
         private void Update()
@@ -56,8 +65,14 @@ namespace IndianOceanAssets.Engine2_5D
             {
                 // Ateş et!
                 projectileShooter.FireAtPoint(currentTarget.position);
+                
+                // --- DEĞİŞİKLİK BAŞLANGICI ---
                 // Bir sonraki ateş etme zamanını ayarla.
-                nextFireTime = Time.time + fireRate;
+                // Artık sabit fireRate yerine PlayerStats'tan gelen anlık saldırı hızını kullanıyoruz.
+                // Atış Aralığı = 1 Saniye / Saniyedeki Atış Sayısı (AttackSpeed)
+                float currentFireRate = 1f / playerStats.CurrentAttackSpeed;
+                nextFireTime = Time.time + currentFireRate;
+                // --- DEĞİŞİKLİK SONU ---
             }
         }
 
