@@ -3,6 +3,8 @@ using UnityEngine;
 // YANLIŞ OLAN "Engine2_D" İSİMLENDİRMESİ DÜZELTİLDİ
 namespace IndianOceanAssets.Engine2_5D
 {
+    // --- YENİ EKLENTİ: PlayerStats component'ini zorunlu kıl ---
+    [RequireComponent(typeof(PlayerStats))]
     public class ProjectileShooter : MonoBehaviour
     {
         [Header("Prefab")]
@@ -10,9 +12,19 @@ namespace IndianOceanAssets.Engine2_5D
 
         // --- DEĞİŞİKLİK BAŞLANGICI ---
         [Header("Stats Data")]
-        [Tooltip("Mermiye atanacak stat'ları (hız, yarıçap) bu veriden çeker.")]
-        [SerializeField] private PlayerStatsData statsData; // YENİ: Inspector'dan sürüklenecek
+        // [SerializeField] private PlayerStatsData statsData; // ESKİ: Kaldırıldı
+        
+        // YENİ: Player'ın anlık stat'larını yöneten component'e referans
+        private PlayerStats playerStats; 
         // --- DEĞİŞİKLİK SONU ---
+
+        // --- YENİ EKLENTİ: Awake metodu ---
+        private void Awake()
+        {
+            // Gerekli PlayerStats component'ini al
+            playerStats = GetComponent<PlayerStats>();
+        }
+        // --- EKLENTİ SONU ---
 
         public void FireAtPoint(Vector3 targetPoint)
         {
@@ -26,16 +38,15 @@ namespace IndianOceanAssets.Engine2_5D
                 
                 // --- DEĞİŞİKLİK BAŞLANGICI ---
                 // Mermiyi fırlatmadan önce stat'larını ayarla
-                if (statsData != null)
+                if (playerStats != null)
                 {
-                    // 'statsData' asset'inden okuduğumuz değerleri mermiye gönder.
-                    projectileScript.Initialize(statsData.projectileSpeed, statsData.projectileRadius);
+                    // 'statsData' yerine 'playerStats' component'inden okuduğumuz anlık (Current) değerleri mermiye gönder.
+                    projectileScript.Initialize(playerStats.CurrentProjectileSpeed, playerStats.CurrentProjectileRadius);
                 }
                 else
                 {
-                    // GÜVENLİK ÖNLEMİ: Eğer 'statsData' atanmamışsa,
-                    // oyunu çökertmek yerine varsayılan değerlerle başlat ve uyarı ver.
-                    Debug.LogWarning("ProjectileShooter üzerinde 'StatsData' referansı eksik! Varsayılan değerler kullanılıyor.");
+                    // GÜVENLİK ÖNLEMİ
+                    Debug.LogWarning("ProjectileShooter üzerinde 'PlayerStats' component'i bulunamadı! Varsayılan değerler kullanılıyor.");
                     projectileScript.Initialize(10f, 1f); // Varsayılan değerler
                 }
                 // --- DEĞİŞİKLİK SONU ---

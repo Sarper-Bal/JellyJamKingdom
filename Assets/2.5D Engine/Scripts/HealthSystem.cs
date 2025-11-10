@@ -9,24 +9,26 @@ namespace IndianOceanAssets.Engine2_5D
         // --- DEĞİŞİKLİK BAŞLANGICI ---
 
         [Header("Stats Data")]
-        [Tooltip("EĞER BU OYUNCU İSE, can verisini bu ScriptableObject'ten çeker.")]
-        [SerializeField] private PlayerStatsData playerStats;
+        // EĞER BU OYUNCU İSE, can verisini bu ScriptableObject'ten çeker.
+        // [SerializeField] private PlayerStatsData playerStats; // ESKİ: Kaldırıldı.
+        
+        // YENİ: PlayerStats component'ine referans. Sadece oyuncu ise kullanılır.
+        private PlayerStats playerStatsComponent;
+
+        // --- DEĞİŞİKLİK SONU ---
+
 
         [Header("Fallback Stats (Düşmanlar/Oyuncu-Dışı Varlıklar İçin)")]
-        [Tooltip("EĞER 'playerStats' atanmamışsa veya bu bir 'isPlayer' değilse, bu can değeri kullanılır.")]
+        [Tooltip("EĞER 'isPlayer' değilse (yani DÜŞMAN ise), bu can değeri kullanılır.")]
         [Range(1, 1000)]
-        [SerializeField] private int maxHealth = 100; // ESKİ DEĞİŞKENİ KORUYORUZ (Düşmanlar için)
+        [SerializeField] private int maxHealth = 100; // Düşmanlar için bu değişken korunuyor.
 
         // Mevcut can.
         private int health; 
         
         // Bu varlığın (oyuncu veya düşman) o anki maksimum canı.
-        // (Power-up alınca artabilir)
         private int currentMaxHealth; 
         
-        // --- DEĞİŞİKLİK SONU ---
-
-
         [Header("Effects & Settings")]
         [SerializeField]
         private GameObject deathEffect; // Effect prefab on death
@@ -39,30 +41,85 @@ namespace IndianOceanAssets.Engine2_5D
         // Bu fonksiyon, obje havuzdan her "spawn" olduğunda ObjectPooler tarafından çağrılır.
         public void OnObjectSpawn()
         {
-            // --- DEĞİŞİKLİK: Canı doğru kaynaktan ayarla ---
             InitializeHealth();
         }
 
         // Initializes health
         private void Start()
         {
-            // --- DEĞİŞİKLİK: Canı doğru kaynaktan ayarla ---
+            // --- DEĞİŞİKLİK BAŞLANGICI ---
+            // PlayerStats component'ini bul (eğer oyuncuysa)
+            if (isPlayer)
+            {
+                playerStatsComponent = GetComponent<PlayerStats>();
+                if (playerStatsComponent == null)
+                {
+                    Debug.LogError("HealthSystem 'isPlayer' olarak işaretli ancak PlayerStats component'i bulunamadı!");
+                }
+            }
+            
+            // Canı ayarla
             InitializeHealth();
+
+            // YENİ: PlayerStats'taki değişiklikleri dinle
+            if (isPlayer && playerStatsComponent != null)
+            {
+                playerStatsComponent.OnStatsChanged += HandlePlayerStatsChanged;
+            }
+            // --- DEĞİŞİKLİK SONU ---
         }
 
-        // YENİ: Hem Start hem de OnObjectSpawn için ortak can başlatma fonksiyonu.
+        // --- YENİ: Event aboneliğini iptal et ---
+        private void OnDestroy()
+        {
+            // Obje yok olduğunda event dinlemeyi bırak (Memory leak önlemi)
+            if (isPlayer && playerStatsComponent != null)
+            {
+                playerStatsComponent.OnStatsChanged -= HandlePlayerStatsChanged;
+            }
+        }
+
+        // --- YENİ FONKSİYON ---
+        // PlayerStats'tan gelen "stats değişti" event'ini dinler.
+        private void HandlePlayerStatsChanged()
+        {
+            // Canımızı yeni stat'a göre güncelle
+            int oldMaxHealth = currentMaxHealth;
+            currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
+
+            // Eğer canımız yeni maksimumu aşıyorsa, onu kırp.
+            // (Örn: Max can 100->80'e düşerse, mevcut can da 80 olmalı)
+            if (health > currentMaxHealth)
+            {
+                health = currentMaxHealth;
+            }
+            // Eğer max can artarsa mevcut canı da arttırabiliriz (opsiyonel)
+            // else if (currentMaxHealth > oldMaxHealth)
+            // {
+            //     health += currentMaxHealth - oldMaxHealth; // Aradaki fark kadar iyileştir
+            // }
+
+            // UI'ı yeni maksimum cana göre güncelle
+            if (isPlayer)
+                HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
+        }
+
+
+        // Hem Start hem de OnObjectSpawn için ortak can başlatma fonksiyonu.
         private void InitializeHealth()
         {
-            if (isPlayer && playerStats != null)
+            // --- DEĞİŞİKLİK BAŞLANGICI: Canı PlayerStats'tan al ---
+            if (isPlayer && playerStatsComponent != null)
             {
-                // Eğer bu OYUNCU ise ve 'playerStats' atanmışsa, canı oradan al.
-                currentMaxHealth = playerStats.maxHealth;
+                // Eğer bu OYUNCU ise, canı ScriptableObject yerine PlayerStats component'inden al.
+                currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
             }
+            // --- DEĞİŞİKLİK SONU ---
             else
             {
-                // Eğer bu DÜŞMAN ise veya 'playerStats' atanmamışsa,
+                // EĞER BU DÜŞMAN İSE veya 'playerStatsComponent' atanmamışsa,
                 // Inspector'daki 'maxHealth' değerini kullan (eski sistem).
-                // Bu, düşmanların bozulmamasını sağlar.
+                // BU SAYEDE DÜŞMANLARIN SAĞLIK SİSTEMİ HİÇBİR ŞEKİLDE ETKİLENMEZ.
                 currentMaxHealth = this.maxHealth;
             }
 
@@ -81,7 +138,6 @@ namespace IndianOceanAssets.Engine2_5D
 
             // Update UI if player
             if (isPlayer)
-                // --- DEĞİŞİKLİK: 'maxHealth' yerine 'currentMaxHealth' kullan ---
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
 
             // If dead, reload scene if player, then die

@@ -9,18 +9,17 @@ namespace IndianOceanAssets.Engine2_5D
     [RequireComponent(typeof(SwordAttack))]
     [RequireComponent(typeof(ProjectileShooter))]
     [RequireComponent(typeof(PlayerInputHandler))]
+    [RequireComponent(typeof(PlayerStats))] // YENİ: PlayerStats component'ini zorunlu kıl
     public class PlayerController : MonoBehaviour
     {
         // --- DEĞİŞİKLİK BAŞLANGICI ---
         [Header("Stats Data")]
-        [Tooltip("Karakterin tüm temel stat'larının (hız, can, vb.) çekildiği veri objesi.")]
-        [SerializeField] private PlayerStatsData statsData; // YENİ: Inspector'dan sürüklenecek
-
-        // ESKİ STAT'LAR KALDIRILDI
-        // [SerializeField] private float moveSpeed = 5f;
-        // [SerializeField] private float rollForce = 8f;
-        // [SerializeField] private float rollCooldown = 1f;
+        // [SerializeField] private PlayerStatsData statsData; // ESKİ: Kaldırıldı
+        
+        // YENİ: Player'ın anlık stat'larını yöneten component'e referans
+        private PlayerStats playerStats;
         // --- DEĞİŞİKLİK SONU ---
+
 
         [Header("Attack Settings")]
         [SerializeField] private AttackType attackType;
@@ -46,6 +45,12 @@ namespace IndianOceanAssets.Engine2_5D
             rb = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputHandler = GetComponent<PlayerInputHandler>();
+            
+            // --- DEĞİŞİKLİK BAŞLANGICI ---
+            // statsData referansı yerine PlayerStats component'ini al
+            playerStats = GetComponent<PlayerStats>();
+            // --- DEĞİŞİKLİK SONU ---
+            
             Application.targetFrameRate = 60;
         }
 
@@ -57,10 +62,11 @@ namespace IndianOceanAssets.Engine2_5D
             else
                 GetComponent<ProjectileShooter>().enabled = true;
                 
-            // GÜVENLİK ÖNLEMİ: Eğer statsData atanmamışsa konsola hata bas.
-            if(statsData == null)
+            // GÜVENLİK ÖNLEMİ
+            // --- DEĞİŞİKLİK: statsData yerine playerStats kontrolü ---
+            if(playerStats == null)
             {
-                Debug.LogError("PlayerController üzerinde 'StatsData' referansı atanmamış! Lütfen 'DefaultPlayerStats' asset'ini sürükleyin.");
+                Debug.LogError("PlayerController üzerinde 'PlayerStats' component'i bulunamadı!");
             }
         }
 
@@ -93,11 +99,11 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Move()
         {
-            // GÜVENLİK ÖNLEMİ: statsData yoksa hareketi engelle.
-            if (statsData == null) return; 
+            // GÜVENLİK ÖNLEMİ
+            if (playerStats == null) return; 
 
-            // --- DEĞİŞİKLİK: 'moveSpeed' yerine 'statsData.moveSpeed' kullan ---
-            Vector3 movement = new Vector3(inputDirection.x, 0f, inputDirection.y) * statsData.moveSpeed * Time.fixedDeltaTime;
+            // --- DEĞİŞİKLİK: 'statsData.moveSpeed' yerine 'playerStats.CurrentMoveSpeed' kullan ---
+            Vector3 movement = new Vector3(inputDirection.x, 0f, inputDirection.y) * playerStats.CurrentMoveSpeed * Time.fixedDeltaTime;
             rb.MovePosition(rb.position + movement);
         }
 
@@ -120,10 +126,10 @@ namespace IndianOceanAssets.Engine2_5D
         public void AttemptRoll()
         {
             // GÜVENLİK ÖNLEMİ
-            if (statsData == null) return;
+            if (playerStats == null) return;
             
-            // --- DEĞİŞİKLİK: 'rollCooldown' yerine 'statsData.rollCooldown' kullan ---
-            if(Time.time > lastRollTime + statsData.rollCooldown && !isRolling)
+            // --- DEĞİŞİKLİK: 'statsData.rollCooldown' yerine 'playerStats.CurrentRollCooldown' kullan ---
+            if(Time.time > lastRollTime + playerStats.CurrentRollCooldown && !isRolling)
             {
                 StartCoroutine(PerformRoll());
             }
@@ -132,14 +138,14 @@ namespace IndianOceanAssets.Engine2_5D
         private IEnumerator PerformRoll()
         {
             // GÜVENLİK ÖNLEMİ
-            if (statsData == null)
+            if (playerStats == null)
             {
                 isRolling = false;
                 yield break;
             }
                 
             isRolling = true;
-            // --- DEĞİŞİKLİK: 'rollCooldown' yerine 'statsData.rollCooldown' kullan ---
+            // --- DEĞİŞİKLİK: 'statsData.rollCooldown' yerine 'playerStats.CurrentRollCooldown' kullan ---
             lastRollTime = Time.time; // Cooldown'u başlat
             
             Vector3 rollDir = new Vector3(inputDirection.x, 0f, inputDirection.y).normalized;
@@ -152,8 +158,8 @@ namespace IndianOceanAssets.Engine2_5D
 
             float rollDuration = 0.3f; // Takla süresi (sabit kalabilir)
             
-            // --- DEĞİŞİKLİK: 'rollForce' yerine 'statsData.rollForce' kullan ---
-            rb.DOMove(rb.position + rollDir * statsData.rollForce, rollDuration).SetEase(Ease.OutQuad);
+            // --- DEĞİŞİKLİK: 'statsData.rollForce' yerine 'playerStats.CurrentRollForce' kullan ---
+            rb.DOMove(rb.position + rollDir * playerStats.CurrentRollForce, rollDuration).SetEase(Ease.OutQuad);
 
             yield return new WaitForSeconds(rollDuration);
 
