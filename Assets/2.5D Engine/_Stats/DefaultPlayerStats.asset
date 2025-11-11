@@ -19,3 +19,4 @@ MonoBehaviour:
   projectileSpeed: 10
   projectileRadius: 1
   attackSpeed: 1
+  attackRange: 5

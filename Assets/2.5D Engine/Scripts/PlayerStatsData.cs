@@ -25,10 +25,12 @@ public class PlayerStatsData : ScriptableObject
     public float projectileSpeed = 10f;
     [Tooltip("Merminin patlama yarıçapı (radius).")]
     public float projectileRadius = 1f;
-
     [Tooltip("Saniyede kaç atış yapılacağı (Atış Aralığı = 1 / Saldırı Hızı).")]
-    public float attackSpeed = 2f; // AutoAttack'taki 0.5f fireRate'in karşılığı (1 / 2 = 0.5)
+    public float attackSpeed = 2f; 
 
-    // Buraya gelecekte 'fireRate', 'swordDamage', 'swordRadius'
-    // gibi diğer tüm stat'ları da ekleyebiliriz.
+    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+    // AutoAttack.cs'teki sabit 'attackRange = 10f' değerini buraya taşıdık.
+    [Tooltip("Otomatik saldırının düşmanları hedef alacağı maksimum menzil.")]
+    public float attackRange = 10f;
+    // --- YENİ EKLENEN KISIM SONU ---
 }

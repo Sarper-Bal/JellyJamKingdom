@@ -22,29 +22,28 @@ public class PlayerStats : MonoBehaviour
     public float CurrentRollCooldown { get; private set; }
     public float CurrentProjectileSpeed { get; private set; }
     public float CurrentProjectileRadius { get; private set; }
-    
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
     public float CurrentAttackSpeed { get; private set; }
+
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (AttackRange) ---
+    [Tooltip("Anlık saldırı menzili")]
+    public float CurrentAttackRange { get; private set; }
     // --- YENİ EKLENEN KISIM SONU ---
 
 
     // --- MODIFIER (DEĞİŞTİRİCİ) LİSTELERİ ---
-    // Her stat için bir "değiştirici" listesi tutarız.
-    // Örn: Hız iksiri içildiğinde, bu listeye bir StatModifier eklenir.
     private readonly List<StatModifier> maxHealthModifiers = new List<StatModifier>();
     private readonly List<StatModifier> moveSpeedModifiers = new List<StatModifier>();
     private readonly List<StatModifier> rollForceModifiers = new List<StatModifier>();
     private readonly List<StatModifier> rollCooldownModifiers = new List<StatModifier>();
     private readonly List<StatModifier> projectileSpeedModifiers = new List<StatModifier>();
     private readonly List<StatModifier> projectileRadiusModifiers = new List<StatModifier>();
-    
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
     private readonly List<StatModifier> attackSpeedModifiers = new List<StatModifier>();
+
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (AttackRange) ---
+    private readonly List<StatModifier> attackRangeModifiers = new List<StatModifier>();
     // --- YENİ EKLENEN KISIM SONU ---
 
     // Stat'lar değiştiğinde tetiklenecek olay (event).
-    // HealthSystem gibi diğer sistemler bu olayı dinleyerek
-    // kendi değerlerini (örn: can barı) güncelleyebilir.
     public event System.Action OnStatsChanged;
 
     private void Awake()
@@ -59,14 +58,9 @@ public class PlayerStats : MonoBehaviour
         RecalculateAllStats();
     }
 
-    // --- GENEL STAT HESAPLAMA FONKSİYONU ---
-
     /// <summary>
     /// Belirli bir temel değere, listedeki tüm modifiyerleri uygular ve son değeri döner.
     /// </summary>
-    /// <param name="baseValue">ScriptableObject'tan gelen temel değer.</param>
-    /// <param name="modifiers">Uygulanacak modifiyer listesi.</param>
-    /// <returns>Hesaplanmış son değer.</returns>
     private float CalculateStat(float baseValue, List<StatModifier> modifiers)
     {
         float finalValue = baseValue;
@@ -114,13 +108,20 @@ public class PlayerStats : MonoBehaviour
         CurrentRollCooldown = CalculateStat(baseStatsData.rollCooldown, rollCooldownModifiers);
         CurrentProjectileSpeed = CalculateStat(baseStatsData.projectileSpeed, projectileSpeedModifiers);
         CurrentProjectileRadius = CalculateStat(baseStatsData.projectileRadius, projectileRadiusModifiers);
-
-        // --- YENİ EKLENEN KISIM BAŞLANGICI ---
         CurrentAttackSpeed = CalculateStat(baseStatsData.attackSpeed, attackSpeedModifiers);
+        
         // Güvenlik önlemi: Saldırı hızı 0 veya negatif olamaz (bölme hatası verir).
         if (CurrentAttackSpeed <= 0)
         {
             CurrentAttackSpeed = 0.1f; // Minimum bir değere çek.
+        }
+        
+        // --- YENİ EKLENEN KISIM BAŞLANGICI (AttackRange) ---
+        CurrentAttackRange = CalculateStat(baseStatsData.attackRange, attackRangeModifiers);
+        // Güvenlik önlemi: Menzil negatif olamaz.
+        if (CurrentAttackRange < 0)
+        {
+            CurrentAttackRange = 0;
         }
         // --- YENİ EKLENEN KISIM SONU ---
 
@@ -143,11 +144,9 @@ public class PlayerStats : MonoBehaviour
 
     /// <summary>
     /// Belirli bir kaynaktan (Source) gelen tüm modifiyerleri kaldırır.
-    /// Örn: "SpeedPotion" kaynağı ile eklenen tüm bonusları sil.
     /// </summary>
     public bool RemoveModifiersFromSource(object source, List<StatModifier> list)
     {
-        // Kaynağı eşleşen modifiyerleri listeden sil
         int numRemoved = list.RemoveAll(mod => mod.Source == source);
 
         if (numRemoved > 0)
@@ -158,7 +157,7 @@ public class PlayerStats : MonoBehaviour
         return false;
     }
     
-    // Her stat için özel Add/Remove metotları (Kullanım kolaylığı için)
+    // --- Her stat için özel Add/Remove metotları (Kullanım kolaylığı için) ---
     
     // Hareket Hızı
     public void AddMoveSpeedModifier(StatModifier mod) => AddModifier(mod, moveSpeedModifiers);
@@ -168,11 +167,13 @@ public class PlayerStats : MonoBehaviour
     public void AddMaxHealthModifier(StatModifier mod) => AddModifier(mod, maxHealthModifiers);
     public bool RemoveMaxHealthModifiersFromSource(object source) => RemoveModifiersFromSource(source, maxHealthModifiers);
     
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
     // Saldırı Hızı
     public void AddAttackSpeedModifier(StatModifier mod) => AddModifier(mod, attackSpeedModifiers);
     public bool RemoveAttackSpeedModifiersFromSource(object source) => RemoveModifiersFromSource(source, attackSpeedModifiers);
-    // --- YENİ EKLENEN KISIM SONU ---
 
-    // (Diğer stat'lar için de benzer kolaylık metotları eklenebilir)
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (AttackRange) ---
+    // Saldırı Menzili (Attack Range)
+    public void AddAttackRangeModifier(StatModifier mod) => AddModifier(mod, attackRangeModifiers);
+    public bool RemoveAttackRangeModifiersFromSource(object source) => RemoveModifiersFromSource(source, attackRangeModifiers);
+    // --- YENİ EKLENEN KISIM SONU ---
 }
