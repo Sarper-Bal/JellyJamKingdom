@@ -1,21 +1,20 @@
 /*
- * ROUND MANAGER (TETİKLEYİCİ)
- * * DEĞİŞİKLİKLER:
- * - 'EndRound()' (tur kazanıldığında) fonksiyonuna, 'WaveManager'ı çağırarak
- * havuz temizliğini tetikleyen 'StopAndCleanupWaves()' komutu eklendi.
- * - 'HealthSystem'e dokunulmadı, oyuncu öldüğünde sahne eskisi gibi yeniden yüklenecek
- * ve bu da havuzun dolaylı olarak temizlenmesini sağlayacak.
+ * ROUND MANAGER (TETİKLEYİCİ - v2)
+ * * DEĞİŞİKLİKLER (Akıllı Temizlik):
+ * - 'EndRound()' metodu: Artık 'StopAndCleanupWaves' ÇAĞIRMIYOR.
+ * Bunun yerine SADECE 'StopWaveSpawning' çağırarak yeni düşman gelişini durduruyor.
+ * - 'ShowVictoryScreen()' Coroutine'i:
+ * 'victoryDelay' kadar bekledikten SONRA,
+ * ve 'victoryPanel'i aktif etmeden ÖNCE,
+ * 'WaveManager.Instance.CleanupDynamicPools()' komutunu çağırarak
+ * havuzların gecikmeli olarak temizlenmesini sağlıyor.
  */
 
 using UnityEngine;
 using TMPro; 
 using System.Collections;
 using UnityEngine.SceneManagement; 
-
-// --- YENİ EKLENTİ ---
-// WaveManager'a komut verebilmek için bu kütüphane eklendi.
-using IndianOceanAssets.Engine2_5D;
-// --- YENİ EKLENTİ SONU ---
+using IndianOceanAssets.Engine2_5D; // WaveManager'a erişim için
 
 namespace IndianOceanAssets.Engine2_5D
 {
@@ -25,7 +24,8 @@ namespace IndianOceanAssets.Engine2_5D
         [Tooltip("Turun toplam süresi (saniye cinsinden).")]
         [SerializeField] private float roundDuration = 60f;
 
-        [Tooltip("Tur bittikten sonra kazanma ekranına geçmeden önceki bekleme süresi.")]
+        [Tooltip("Tur bittikten sonra (spawn'lar durduktan sonra) " +
+                 "Zafer ekranı gelene kadar oyuncuya tanınan 'lütuf zamanı' (grace period).")]
         [SerializeField] private float victoryDelay = 3f;
 
         [Header("UI")]
@@ -33,14 +33,10 @@ namespace IndianOceanAssets.Engine2_5D
         [SerializeField] private TextMeshProUGUI timerText;
 
         [Tooltip("Tur bittiğinde gösterilecek olan 'Kazandın!' UI paneli.")]
-        [SerializeField] private GameObject victoryPanel; // Inspector'dan atanmalı
+        [SerializeField] private GameObject victoryPanel; 
 
-        // Diğer script'lerin oyunun ne kadar süredir çalıştığını bilmesi için.
         public float TimeElapsed { get; private set; }
-        
-        // Diğer script'lerin (WaveManager gibi) turun toplam süresini okuyabilmesi için.
         public float RoundDuration => roundDuration; 
-
         public bool IsRoundActive { get; private set; }
 
         private void Start()
@@ -73,37 +69,52 @@ namespace IndianOceanAssets.Engine2_5D
         
         /// <summary>
         /// Turu sonlandırır (Kazanma durumu).
-        /// Düşman spawn'ını durdurur, havuzu temizler ve Zafer ekranını gösterir.
+        /// Düşman spawn'ını HEMEN durdurur ve GECİKMELİ temizlik sürecini başlatır.
         /// </summary>
         private void EndRound()
         {
-            // Bu fonksiyonun 'Update' içinde tekrar tekrar çağrılmasını engelle
             if (!IsRoundActive) return; 
             
             IsRoundActive = false;
-            Debug.Log("Tur Bitti! (Kazanıldı). Temizlik başlıyor.");
+            Debug.Log("Tur Bitti! (Kazanıldı). Yeni spawn'lar durduruldu.");
 
-            // --- YENİ EKLENEN KISIM BAŞLANGICI (Temizlik) ---
+            // --- DEĞİŞİKLİK BAŞLANGICI ---
             
-            // 1. WaveManager'a spawn'ı durdurma ve "enemy" havuzunu yok etme komutu ver.
+            // 1. WaveManager'a YENİ spawn'ları HEMEN durdurma komutu ver.
+            //    (Artık havuzları TEMİZLEMİYORUZ)
             if (WaveManager.Instance != null)
             {
-                WaveManager.Instance.StopAndCleanupWaves();
+                WaveManager.Instance.StopWaveSpawning();
+            }
+            
+            // 2. Gecikmeli olarak Zafer Ekranını ve Havuz Temizliğini tetikle.
+            StartCoroutine(ShowVictoryScreen());
+            
+            // --- DEĞİŞİKLİK SONU ---
+        }
+
+        /// <summary>
+        /// Gecikmeli olarak havuzları temizler ve "Kazanma" ekranını gösterir.
+        /// </summary>
+        private IEnumerator ShowVictoryScreen()
+        {
+            // 1. Lütuf zamanı (grace period) kadar bekle.
+            //    Bu sırada oyuncu kalan düşmanları öldürebilir ve efektler çalışır.
+            yield return new WaitForSeconds(victoryDelay);
+
+            // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+            
+            // 2. Lütuf zamanı bitti. Havuzları TEMİZLE.
+            //    Bu andan itibaren ölen düşmanların efekti görünmez
+            //    (ama 'ReturnToPool' metodumuz buna karşı güvende).
+            if (WaveManager.Instance != null)
+            {
+                WaveManager.Instance.CleanupDynamicPools();
             }
             
             // --- YENİ EKLENEN KISIM SONU ---
 
-            // 2. Zafer ekranını gecikmeli olarak göster
-            StartCoroutine(ShowVictoryScreen());
-        }
-
-        /// <summary>
-        /// Gecikmeli olarak "Kazanma" ekranını gösterir.
-        /// </summary>
-        private IEnumerator ShowVictoryScreen()
-        {
-            yield return new WaitForSeconds(victoryDelay);
-
+            // 3. Zafer ekranını göster.
             if (victoryPanel != null)
             {
                 victoryPanel.SetActive(true);
@@ -111,10 +122,13 @@ namespace IndianOceanAssets.Engine2_5D
         }
         
         /// <summary>
-        /// Sahneyi yeniden yükler (Örn: "Tekrar Oyna" butonu için)
+        /// Sahneyi yeniden yükler (Örn: "Tekrar Oyna" butonu veya oyuncu ölünce)
         /// </summary>
         public void ReloadScene()
         {
+            // (Oyuncu öldüğünde HealthSystem burayı çağırdığında,
+            // sahne yeniden yüklendiği için havuzlar otomatik olarak temizlenir.
+            // Bu yüzden 'Cleanup' çağırmaya gerek yok.)
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 

@@ -9377,7 +9377,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   roundDuration: 30
-  victoryDelay: 3
+  victoryDelay: 10
   timerText: {fileID: 407776899}
   victoryPanel: {fileID: 0}
 --- !u!4 &1979538492
