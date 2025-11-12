@@ -1,53 +1,59 @@
+/*
+ * PROJECTILE SHOOTER (VERİ AKTARICI)
+ * * DEĞİŞİKLİKLER:
+ * - 'FireAtPoint' metodu güncellendi.
+ * - 'projectileScript.Initialize' çağrısına artık 3. parametre olarak
+ * 'playerStats.CurrentProjectileDamage' (anlık hasar) değeri gönderiliyor.
+ */
+
 using UnityEngine;
 
-// YANLIŞ OLAN "Engine2_D" İSİMLENDİRMESİ DÜZELTİLDİ
 namespace IndianOceanAssets.Engine2_5D
 {
-    // --- YENİ EKLENTİ: PlayerStats component'ini zorunlu kıl ---
-    [RequireComponent(typeof(PlayerStats))]
+    [RequireComponent(typeof(PlayerStats))] // PlayerStats component'ini zorunlu kıl
     public class ProjectileShooter : MonoBehaviour
     {
         [Header("Prefab")]
-        [SerializeField] private GameObject projectilePrefab; // Hangi mermi prefab'ını spawn edeceğimizi bilmemiz gerekiyor.
+        [SerializeField] private GameObject projectilePrefab; 
 
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
-        [Header("Stats Data")]
-        // [SerializeField] private PlayerStatsData statsData; // ESKİ: Kaldırıldı
-        
-        // YENİ: Player'ın anlık stat'larını yöneten component'e referans
+        // Player'ın anlık stat'larını yöneten component'e referans
         private PlayerStats playerStats; 
-        // --- DEĞİŞİKLİK SONU ---
 
-        // --- YENİ EKLENTİ: Awake metodu ---
         private void Awake()
         {
             // Gerekli PlayerStats component'ini al
             playerStats = GetComponent<PlayerStats>();
         }
-        // --- EKLENTİ SONU ---
 
+        /// <summary>
+        /// Belirtilen noktaya doğru bir mermi ateşler.
+        /// (AutoAttack.cs tarafından çağrılır)
+        /// </summary>
         public void FireAtPoint(Vector3 targetPoint)
         {
-            // YENİ: Mermiyi havuzdan "projectile" etiketiyle spawn et
+            // Mermiyi havuzdan "projectile" etiketiyle spawn et
             GameObject projectileGO = ObjectPooler.Instance.SpawnFromPool("projectile", transform.position, Quaternion.identity);
 
             if (projectileGO != null)
             {
-                // Merminin script'ine eriş
                 Projectile projectileScript = projectileGO.GetComponent<Projectile>();
                 
                 // --- DEĞİŞİKLİK BAŞLANGICI ---
-                // Mermiyi fırlatmadan önce stat'larını ayarla
                 if (playerStats != null)
                 {
-                    // 'statsData' yerine 'playerStats' component'inden okuduğumuz anlık (Current) değerleri mermiye gönder.
-                    projectileScript.Initialize(playerStats.CurrentProjectileSpeed, playerStats.CurrentProjectileRadius);
+                    // Mermiyi fırlatmadan önce stat'larını ayarla:
+                    // 1. Hız, 2. Yarıçap, 3. Hasar
+                    projectileScript.Initialize(
+                        playerStats.CurrentProjectileSpeed, 
+                        playerStats.CurrentProjectileRadius,
+                        playerStats.CurrentProjectileDamage // YENİ: Hasar parametresi eklendi
+                    );
                 }
                 else
                 {
-                    // GÜVENLİK ÖNLEMİ
-                    Debug.LogWarning("ProjectileShooter üzerinde 'PlayerStats' component'i bulunamadı! Varsayılan değerler kullanılıyor.");
-                    projectileScript.Initialize(10f, 1f); // Varsayılan değerler
+                    // GÜVENLİK ÖNLEMİ: PlayerStats yoksa varsayılan değerleri kullan
+                    Debug.LogWarning("ProjectileShooter üzerinde 'PlayerStats' referansı eksik! Varsayılan değerler kullanılıyor.");
+                    projectileScript.Initialize(10f, 1f, 5); // Varsayılan değerler (5 hasar)
                 }
                 // --- DEĞİŞİKLİK SONU ---
 

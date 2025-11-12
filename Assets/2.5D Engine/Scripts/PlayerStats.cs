@@ -1,3 +1,13 @@
+/*
+ * PLAYER STATS (YÖNETİCİ COMPONENT)
+ * * DEĞİŞİKLİKLER (v4 - Hasar):
+ * - 'CurrentProjectileDamage' (int) anlık özelliği eklendi.
+ * - 'projectileDamageModifiers' (List<StatModifier>) eklendi.
+ * - 'RecalculateAllStats' metodu, 'CurrentProjectileDamage'i hesaplayacak şekilde güncellendi.
+ * - 'AddProjectileDamageModifier' ve 'RemoveProjectileDamageModifiersFromSource'
+ * yardımcı metotları eklendi.
+ */
+
 using UnityEngine;
 using System.Collections.Generic;
 using System.Collections.ObjectModel; // ReadOnlyCollection için
@@ -11,15 +21,13 @@ public class PlayerStats : MonoBehaviour
     [Tooltip("Tüm temel stat'ların çekildiği ScriptableObject")]
     [SerializeField] private PlayerStatsData baseStatsData;
 
-    // --- YENİ EKLENEN KISIM BAŞLANGICI (Referanslar) ---
     [Header("Component References")]
     [Tooltip("Karakterin görünümünün (Sprite) atanacağı SpriteRenderer. " +
              "Genellikle 'GFX' isimli child objenin üzerindedir.")]
     [SerializeField] private SpriteRenderer characterGfxRenderer;
-    // --- YENİ EKLENEN KISIM SONU ---
-
 
     // --- ANLIK (RUNTIME) HESAPLANMIŞ STAT'LAR ---
+    // (Diğer script'ler bu property'leri okur)
     public int CurrentMaxHealth { get; private set; }
     public float CurrentMoveSpeed { get; private set; }
     public float CurrentRollForce { get; private set; }
@@ -28,6 +36,11 @@ public class PlayerStats : MonoBehaviour
     public float CurrentProjectileRadius { get; private set; }
     public float CurrentAttackSpeed { get; private set; }
     public float CurrentAttackRange { get; private set; }
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Projectile Damage) ---
+    [Tooltip("Anlık mermi hasarı")]
+    public int CurrentProjectileDamage { get; private set; }
+    // --- YENİ EKLENEN KISIM SONU ---
 
 
     // --- MODIFIER (DEĞİŞTİRİCİ) LİSTELERİ ---
@@ -39,6 +52,10 @@ public class PlayerStats : MonoBehaviour
     private readonly List<StatModifier> projectileRadiusModifiers = new List<StatModifier>();
     private readonly List<StatModifier> attackSpeedModifiers = new List<StatModifier>();
     private readonly List<StatModifier> attackRangeModifiers = new List<StatModifier>();
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Projectile Damage) ---
+    private readonly List<StatModifier> projectileDamageModifiers = new List<StatModifier>();
+    // --- YENİ EKLENEN KISIM SONU ---
 
     // Stat'lar değiştiğinde tetiklenecek olay (event).
     public event System.Action OnStatsChanged;
@@ -51,22 +68,18 @@ public class PlayerStats : MonoBehaviour
             return;
         }
         
-        // --- YENİ EKLENEN KISIM BAŞLANGICI (Görünüm Ayarlama) ---
-        // Stat hesaplamalarından önce görünümü ayarla.
+        // Görünümü ayarla
         InitializeVisuals();
-        // --- YENİ EKLENEN KISIM SONU ---
         
-        // Başlangıçta tüm stat'ları temel değerlere göre hesapla.
+        // Tüm stat'ları hesapla
         RecalculateAllStats();
     }
-
-    // --- YENİ EKLENEN FONKSİYON BAŞLANGICI ---
+    
     /// <summary>
     /// Karakterin görselini baseStatsData'dan (SO) okuyarak ayarlar.
     /// </summary>
     private void InitializeVisuals()
     {
-        // Inspector'dan GFX objesinin SpriteRenderer'ı atanmış mı kontrol et.
         if (characterGfxRenderer == null)
         {
             Debug.LogError("PlayerStats üzerinde 'Character Gfx Renderer' referansı atanmamış! " +
@@ -74,22 +87,18 @@ public class PlayerStats : MonoBehaviour
             return;
         }
 
-        // ScriptableObject'ta bir sprite tanımlanmış mı kontrol et.
         if (baseStatsData.characterSprite != null)
         {
-            // Sprite'ı ata.
             characterGfxRenderer.sprite = baseStatsData.characterSprite;
         }
         else
         {
-            Debug.LogWarning($"PlayerStatsData ({baseStatsData.name}) üzerinde 'Character Sprite' atanmamış. " +
-                             "Mevcut sprite korunacak.");
+            Debug.LogWarning($"PlayerStatsData ({baseStatsData.name}) üzerinde 'Character Sprite' atanmamış.");
         }
     }
-    // --- YENİ EKLENEN FONKSİYON SONU ---
 
     /// <summary>
-    /// Belirli bir temel değere, listedeki tüm modifiyerleri uygular ve son değeri döner.
+    /// Belirli bir temel değere (float), listedeki tüm modifiyerleri uygular ve son değeri döner.
     /// </summary>
     private float CalculateStat(float baseValue, List<StatModifier> modifiers)
     {
@@ -123,29 +132,32 @@ public class PlayerStats : MonoBehaviour
     /// </summary>
     private void RecalculateAllStats()
     {
-        CurrentMaxHealth = (int)CalculateStat(baseStatsData.maxHealth, maxHealthModifiers);
+        // Float Değerler
         CurrentMoveSpeed = CalculateStat(baseStatsData.moveSpeed, moveSpeedModifiers);
         CurrentRollForce = CalculateStat(baseStatsData.rollForce, rollForceModifiers);
         CurrentRollCooldown = CalculateStat(baseStatsData.rollCooldown, rollCooldownModifiers);
         CurrentProjectileSpeed = CalculateStat(baseStatsData.projectileSpeed, projectileSpeedModifiers);
         CurrentProjectileRadius = CalculateStat(baseStatsData.projectileRadius, projectileRadiusModifiers);
         CurrentAttackSpeed = CalculateStat(baseStatsData.attackSpeed, attackSpeedModifiers);
-        
-        if (CurrentAttackSpeed <= 0)
-        {
-            CurrentAttackSpeed = 0.1f;
-        }
-        
         CurrentAttackRange = CalculateStat(baseStatsData.attackRange, attackRangeModifiers);
-        if (CurrentAttackRange < 0)
-        {
-            CurrentAttackRange = 0;
-        }
+
+        // Int Değerler (Hesaplama float yapılır, sonra int'e çevrilir)
+        CurrentMaxHealth = (int)CalculateStat(baseStatsData.maxHealth, maxHealthModifiers);
         
+        // --- YENİ EKLENEN KISIM BAŞLANGICI (Projectile Damage) ---
+        CurrentProjectileDamage = (int)CalculateStat(baseStatsData.projectileDamage, projectileDamageModifiers);
+        // --- YENİ EKLENEN KISIM SONU ---
+
+        
+        // Güvenlik kontrolleri (Negatif değerleri veya sıfırı engellemek için)
+        if (CurrentAttackSpeed <= 0) CurrentAttackSpeed = 0.1f;
+        if (CurrentAttackRange < 0) CurrentAttackRange = 0;
+        if (CurrentProjectileDamage < 0) CurrentProjectileDamage = 0;
+        
+        // Değişiklikleri diğer script'lere (örn: HealthSystem) haber ver.
         OnStatsChanged?.Invoke();
     }
     
-
     // --- DIŞARIDAN ERİŞİM (PUBLIC) METOTLARI ---
 
     /// <summary>
@@ -172,7 +184,7 @@ public class PlayerStats : MonoBehaviour
         return false;
     }
     
-    // --- Stat'a özel Add/Remove metotları ---
+    // --- Stat'a özel Add/Remove metotları (Kullanım kolaylığı için) ---
     
     public void AddMoveSpeedModifier(StatModifier mod) => AddModifier(mod, moveSpeedModifiers);
     public bool RemoveMoveSpeedModifiersFromSource(object source) => RemoveModifiersFromSource(source, moveSpeedModifiers);
@@ -185,4 +197,9 @@ public class PlayerStats : MonoBehaviour
 
     public void AddAttackRangeModifier(StatModifier mod) => AddModifier(mod, attackRangeModifiers);
     public bool RemoveAttackRangeModifiersFromSource(object source) => RemoveModifiersFromSource(source, attackRangeModifiers);
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Projectile Damage) ---
+    public void AddProjectileDamageModifier(StatModifier mod) => AddModifier(mod, projectileDamageModifiers);
+    public bool RemoveProjectileDamageModifiersFromSource(object source) => RemoveModifiersFromSource(source, projectileDamageModifiers);
+    // --- YENİ EKLENEN KISIM SONU ---
 }

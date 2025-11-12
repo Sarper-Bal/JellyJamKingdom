@@ -4979,8 +4979,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1be99b91fb3424c80b51dcc33b911d13, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
-  enemyDeathEffectPrefab: {fileID: 4806121257990350900, guid: 8ba56a88eb8db7342a07b8f07085b2f8, type: 3}
   roundManager: {fileID: 1979538491}
   waves:
   - {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
@@ -9496,7 +9494,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ad32b52397da46468fd1323848cca16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  roundDuration: 60
+  roundDuration: 30
   victoryDelay: 3
   timerText: {fileID: 407776899}
   victoryPanel: {fileID: 0}

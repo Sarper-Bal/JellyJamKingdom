@@ -8,11 +8,9 @@ public class PlayerStatsData : ScriptableObject
     // ScriptableObject'lar, MonoBehaviour gibi çalışmayan, sadece veri tutan
     // özel class'lardır. Oyunun dengesini (balancing) buradan yapacağız.
 
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
     [Header("Visuals")]
     [Tooltip("Karakterin 'GFX' objesinde kullanılacak ana görünümü (Sprite).")]
     public Sprite characterSprite;
-    // --- YENİ EKLENEN KISIM SONU ---
 
     [Header("Movement Stats")]
     [Tooltip("Karakterin saniyedeki hareket hızı.")]
@@ -35,4 +33,10 @@ public class PlayerStatsData : ScriptableObject
     public float attackSpeed = 2f; 
     [Tooltip("Otomatik saldırının düşmanları hedef alacağı maksimum menzil.")]
     public float attackRange = 10f;
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+    // Hasar miktarını HealthSystem.Damage() metodu 'int' aldığı için 'int' olarak tutmak daha sağlıklıdır.
+    [Tooltip("Merminin (Projectile) düşmanlara vereceği temel hasar miktarı.")]
+    public int projectileDamage = 10;
+    // --- YENİ EKLENEN KISIM SONU ---
 }

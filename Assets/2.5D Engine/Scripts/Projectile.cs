@@ -1,20 +1,28 @@
+/*
+ * PROJECTILE (HASAR UYGULAYICI)
+ * * DEĞİŞİKLİKLER:
+ * - 'currentDamage' (int) adında yeni bir özel değişken eklendi.
+ * - 'Initialize' metodu artık 'damage' parametresi alıyor ve 'currentDamage'i ayarlıyor.
+ * - 'Explode' metodu güncellendi:
+ * - 'C.GetComponent<HealthSystem>().Die()' komutu,
+ * - 'C.GetComponent<HealthSystem>().Damage(currentDamage)' komutu ile değiştirildi.
+ */
+
 using UnityEngine;
 
 namespace IndianOceanAssets.Engine2_5D
 {
-    // YENİ: IPooledObject arayüzünü uyguluyoruz.
+    // IPooledObject arayüzünü uyguluyoruz (Havuzlanabilir obje)
     public class Projectile : MonoBehaviour, IPooledObject
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
-        // Merminin kendi stat değişkenlerini kaldırıyoruz.
-        // public float speed = 10f; // ESKİ: Kaldırıldı
-        // public float radius = 1f; // ESKİ: Kaldırıldı
-
-        // YENİ: Merminin bu "yaşam döngüsündeki" hız ve yarıçap değerleri.
-        // Bu değerler ProjectileShooter tarafından atanacak.
+        // Merminin bu "yaşam döngüsündeki" anlık stat'ları
+        // Bu değerler ProjectileShooter tarafından 'Initialize' ile atanacak.
         private float currentSpeed;
         private float currentRadius;
-        // --- DEĞİŞİKLİK SONU ---
+        
+        // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+        private int currentDamage; // Merminin bu atıştaki hasar miktarı
+        // --- YENİ EKLENEN KISIM SONU ---
 
         private Vector3 target;
 
@@ -22,23 +30,33 @@ namespace IndianOceanAssets.Engine2_5D
         public LayerMask whatIsEnemy;
         public LayerMask whatIsPlant;
 
-        // YENİ: IPooledObject'ten gelen özellikler.
+        // IPooledObject arayüzünden gelen özellikler
         public string PoolTag { get; set; }
         public void OnObjectSpawn()
         {
             // Mermi her spawn olduğunda yapılacak bir şey varsa buraya yazılır.
-            // Stat'lar 'Initialize' ile ayarlandığı için burası şimdilik boş.
+            // (Stat'lar 'Initialize' ile ayarlandığı için burası şimdilik boş)
         }
 
-        // --- YENİ FONKSİYON ---
-        // Bu fonksiyon, mermiyi spawn eden 'ProjectileShooter' tarafından çağırılır.
-        // Mermiye bu yaşam döngüsünde hangi stat'ları kullanacağını söyler.
-        public void Initialize(float speed, float radius)
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        /// <summary>
+        /// Bu fonksiyon, mermiyi spawn eden 'ProjectileShooter' tarafından çağırılır.
+        /// Mermiye bu yaşam döngüsünde hangi stat'ları kullanacağını söyler.
+        /// </summary>
+        /// <param name="speed">Anlık mermi hızı</param>
+        /// <param name="radius">Anlık patlama yarıçapı</param>
+        /// <param name="damage">Anlık mermi hasarı</param>
+        public void Initialize(float speed, float radius, int damage) // YENİ: 'int damage' eklendi
         {
             this.currentSpeed = speed;
             this.currentRadius = radius;
+            this.currentDamage = damage; // YENİ: Hasarı ayarla
         }
+        // --- DEĞİŞİKLİK SONU ---
 
+        /// <summary>
+        /// Mermiye hedefini (gideceği yeri) atar.
+        /// </summary>
         public void SetTarget(Vector3 point)
         {
             target = point;
@@ -48,7 +66,7 @@ namespace IndianOceanAssets.Engine2_5D
 
         void Update()
         {
-            // --- DEĞİŞİKLİK: 'speed' yerine 'currentSpeed' kullan ---
+            // 'currentSpeed' kullanarak hedefe doğru hareket et
             transform.position = Vector3.MoveTowards(transform.position, target, currentSpeed * Time.deltaTime);
 
             // Hedefe yeterince yaklaştıysak patla
@@ -58,35 +76,40 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
+        /// <summary>
+        /// Merminin patlama ve etki alanını (AOE) yönetir.
+        /// </summary>
         void Explode()
         {
             // Patlama efektini havuzdan çağır
             ObjectPooler.Instance.SpawnFromPool("explosion", transform.position, Quaternion.identity);
 
-            // --- DEĞİŞİKLİK: 'radius' yerine 'currentRadius' kullan ---
+            // --- DEĞİŞİKLİK BAŞLANGICI (Damage vs Die) ---
             // 'currentRadius' içindeki Düşmanları bul
             Collider[] enemyColliders = Physics.OverlapSphere(transform.position, currentRadius, whatIsEnemy);
             if (enemyColliders != null)
             {
                 foreach (Collider C in enemyColliders)
                 {
-                    // Düşmanlara 'Die' (Öl) komutu ver
-                    C.GetComponent<HealthSystem>().Die();
+                    // Düşmanlara 'Die' (Öl) komutu VERMEK YERİNE,
+                    // 'currentDamage' (anlık hasar) miktarında HASAR VER (Damage).
+                    C.GetComponent<HealthSystem>().Damage(currentDamage);
                 }
             }
+            // --- DEĞİŞİKLİK SONU ---
 
-            // --- DEĞİŞİKLİK: 'radius' yerine 'currentRadius' kullan ---
             // 'currentRadius' içindeki Bitkileri bul
             Collider[] plantationColliders = Physics.OverlapSphere(transform.position, currentRadius, whatIsPlant);
             if (plantationColliders != null)
             {
                 foreach (Collider C in plantationColliders)
                 {
+                    // Bitkiler hasar almaz, direkt kesilir (Bu mantık korunuyor)
                     C.GetComponent<Plantation>().Cut();
                 }
             }
 
-            // YENİ: Kendini yok etmek yerine, kendi etiketiyle havuza geri dön.
+            // Kendini yok etmek yerine, kendi etiketiyle havuza geri dön.
             ObjectPooler.Instance.ReturnToPool(PoolTag, gameObject);
         }
     }
