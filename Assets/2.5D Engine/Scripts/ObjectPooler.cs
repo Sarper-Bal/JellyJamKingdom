@@ -1,8 +1,17 @@
+/*
+ * OBJECT POOLER (HİBRİT MODEL)
+ * * DEĞİŞİKLİKLER (Hata Düzeltmesi):
+ * - 'Pool' sınıfı ve 'pools' listesi (Inspector'da görünen) geri getirildi.
+ * - 'Start()' metodu, 'pools' listesindeki 'autoCalculateSize' olarak İŞARETLENMEMİŞ
+ * tüm statik havuzları (projectile, explosion vb.) oluşturacak şekilde güncellendi.
+ * - 'CreatePool' metodu, 'Start' içinden de kullanılabilecek şekilde korundu.
+ * - 'WaveManager' hala 'CreatePool("enemy", ...)' çağrısını yaparak DİNAMİK havuzu oluşturacak.
+ * - 'RoundManager' hala 'DestroyPool("enemy")' çağrısını yaparak DİNAMİK havuzu yok edecek.
+ */
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-// YENİ: WaveManager'a erişim için eklendi
-using IndianOceanAssets.Engine2_5D; 
 
 public class ObjectPooler : MonoBehaviour
 {
@@ -11,10 +20,19 @@ public class ObjectPooler : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         Instance = this;
+        
+        // Sözlüğü (Dictionary) hemen 'Awake' içinde başlat.
+        poolDictionary = new Dictionary<string, Queue<GameObject>>();
     }
     #endregion
 
+    // --- DEĞİŞİKLİK: 'Pool' sınıfı ve 'pools' listesi geri getirildi ---
     [System.Serializable]
     public class Pool
     {
@@ -22,69 +40,99 @@ public class ObjectPooler : MonoBehaviour
         public GameObject prefab;
         public int size;
         
-        // --- YENİ EKLENEN KISIM BAŞLANGICI ---
-        [Tooltip("Eğer bu 'True' ise, 'size' değeri Inspector'dan okunmaz. " +
-                 "Bunun yerine 'WaveManager'a bağlanarak gerekli düşman sayısı otomatik hesaplanır. " +
-                 "Şu anda SADECE 'enemy' tag'i için geçerlidir.")]
-        public bool autoCalculateSize = false;
-        // --- YENİ EKLENEN KISIM SONU ---
+        [Tooltip("EĞER BU İŞARETLENİRSE, bu havuz 'Start'ta OLUŞTURULMAZ. " +
+                 "Bunun yerine 'WaveManager' gibi bir yöneticinin 'CreatePool' komutu vermesi beklenir.")]
+        public bool isDynamicallyManaged = false; // 'autoCalculateSize' idi, ismi netleşti.
     }
 
+    [Tooltip("Oyun başında oluşturulacak STATİK havuzlar (Projectile, Effects vb.)")]
     public List<Pool> pools;
+    // --- DEĞİŞİKLİK SONU ---
+
     private Dictionary<string, Queue<GameObject>> poolDictionary;
 
     void Start()
     {
-        poolDictionary = new Dictionary<string, Queue<GameObject>>();
-
+        // --- DEĞİŞİKLİK: Statik havuzları oluşturma ---
+        
+        // Inspector'dan atanan 'pools' listesini döngüye al
         foreach (Pool pool in pools)
         {
-            // --- YENİ EKLENEN KISIM BAŞLANGICI (Otomatik Boyutlandırma) ---
-            
-            // Eğer bu havuz 'autoCalculateSize' olarak işaretlendiyse...
-            if (pool.autoCalculateSize)
+            // Eğer havuz 'Dinamik' olarak işaretlendiyse (örn: "enemy" havuzu),
+            // bu havuzu 'Start'ta oluşturma. WaveManager'ın oluşturmasını bekle.
+            if (pool.isDynamicallyManaged)
             {
-                // ...ve tag'i 'enemy' ise...
-                if (pool.tag == "enemy")
-                {
-                    // WaveManager'ın 'Awake' metodunda hesapladığı değere eriş.
-                    if (WaveManager.Instance != null)
-                    {
-                        pool.size = WaveManager.Instance.CalculatedEnemyPoolSize;
-                    }
-                    else
-                    {
-                        // WaveManager sahnede yoksa veya bir hata olduysa
-                        Debug.LogError("'enemy' havuzu 'autoCalculateSize' olarak ayarlandı ancak sahnede WaveManager bulunamadı! " +
-                                       "Havuz boyutu '10' olarak ayarlanıyor.");
-                        pool.size = 10; // Güvenli varsayılan
-                    }
-                }
-                else
-                {
-                    // 'projectile' veya 'explosion' gibi başka bir tag ise
-                    Debug.LogWarning($"'{pool.tag}' havuzu 'autoCalculateSize' olarak ayarlandı, " +
-                                     "ancak bu özellik şu an sadece 'enemy' tag'i için destekleniyor. " +
-                                     "Inspector'daki 'size' değeri ({pool.size}) kullanılacak.");
-                }
-            }
-            // --- YENİ EKLENEN KISIM SONU ---
-
-
-            // Havuzu oluştur
-            Queue<GameObject> objectPool = new Queue<GameObject>();
-
-            // 'pool.size' (ya Inspector'dan gelen ya da otomatik hesaplanan) kadar obje oluştur
-            for (int i = 0; i < pool.size; i++)
-            {
-                GameObject obj = Instantiate(pool.prefab);
-                obj.SetActive(false);
-                objectPool.Enqueue(obj);
+                continue; 
             }
 
-            poolDictionary.Add(pool.tag, objectPool);
+            // 'projectile', 'explosion' gibi statik havuzları oluştur.
+            CreatePool(pool.tag, pool.prefab, pool.size);
         }
+        // --- DEĞİŞİKLİK SONU ---
     }
+
+    /// <summary>
+    /// Belirtilen 'tag' için yeni bir obje havuzu oluşturur.
+    /// Statik havuzlar için 'Start()'ta, dinamik havuzlar için 'WaveManager' tarafından çağrılır.
+    /// </summary>
+    public void CreatePool(string tag, GameObject prefab, int size)
+    {
+        if (poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogWarning($"ObjectPooler: '{tag}' etiketine sahip bir havuz zaten mevcut. " +
+                             "Yeni havuz oluşturma işlemi iptal edildi.");
+            return;
+        }
+
+        if (prefab == null)
+        {
+            Debug.LogError($"ObjectPooler: '{tag}' etiketi için havuz oluşturulmak istendi " +
+                           "ancak 'prefab' atanmamış (null)! Havuz oluşturulamadı.");
+            return;
+        }
+
+        Queue<GameObject> objectPool = new Queue<GameObject>();
+
+        for (int i = 0; i < size; i++)
+        {
+            GameObject obj = Instantiate(prefab);
+            obj.SetActive(false); 
+            objectPool.Enqueue(obj); 
+        }
+
+        poolDictionary.Add(tag, objectPool);
+        
+        // (Bu log'u statik havuzlar için de göreceğiz)
+        Debug.Log($"ObjectPooler: '{tag}' havuzu, {size} adet '{prefab.name}' objesi ile başarıyla oluşturuldu.");
+    }
+    
+    /// <summary>
+    /// Belirtilen 'tag'e sahip DİNAMİK havuzu ve içindeki tüm GameObjec'leri yok eder.
+    /// </summary>
+    public void DestroyPool(string tag)
+    {
+        if (!poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogWarning($"ObjectPooler: '{tag}' etiketine sahip bir havuz bulunamadı. " +
+                             "Yok etme işlemi iptal edildi.");
+            return;
+        }
+
+        Queue<GameObject> objectPool = poolDictionary[tag];
+
+        int destroyedCount = 0;
+        while (objectPool.Count > 0)
+        {
+            GameObject objToDestroy = objectPool.Dequeue();
+            Destroy(objToDestroy);
+            destroyedCount++;
+        }
+
+        poolDictionary.Remove(tag);
+        
+        Debug.Log($"ObjectPooler: '{tag}' havuzu temizlendi. {destroyedCount} adet obje yok edildi.");
+    }
+
 
     public GameObject SpawnFromPool(string tag, Vector3 position, Quaternion rotation)
     {
@@ -94,34 +142,31 @@ public class ObjectPooler : MonoBehaviour
             return null;
         }
         
-        // --- DEĞİŞİKLİK: Havuzun boşalması durumunda daha net uyarı ---
         if (poolDictionary[tag].Count == 0)
         {
-            // Eğer 'enemy' havuzu boşaldıysa, bu ciddi bir hatadır (hesaplama yanlış demektir).
-            // Diğer havuzlar (mermi, efekt) için boyut arttırılması uyarısı verilebilir.
-            if (tag == "enemy")
+            // Statik havuzlar (mermi vb.) için bu uyarı normaldir.
+            if (tag != "enemy")
             {
-                 Debug.LogError($"'enemy' havuzu boşaldı! (Pool with tag {tag} is empty). " +
-                                "WaveManager'daki hesaplama yetersiz kalmış olabilir veya düşmanlar havuza dönmüyor olabilir.");
+                Debug.LogWarning($"Pool with tag '{tag}' is empty. 'Size' değerini " +
+                                 $"ObjectPooler Inspector'ından arttırmayı düşünün.");
             }
             else
             {
-                 Debug.LogWarning($"Pool with tag {tag} is empty. Consider increasing pool size in Inspector.");
+                // "enemy" havuzu için bu kritik bir hatadır.
+                Debug.LogError($"Pool with tag '{tag}' is EMPTY! " +
+                           "Hesaplanan havuz boyutu yetersiz veya düşmanlar havuza dönmüyor (ReturnToPool).");
             }
-            return null; // Boşsa null dön
+            return null;
         }
-        // --- DEĞİŞİKLİK SONU ---
 
         GameObject objectToSpawn = poolDictionary[tag].Dequeue();
         objectToSpawn.SetActive(true);
         objectToSpawn.transform.position = position;
         objectToSpawn.transform.rotation = rotation;
 
-        // Objenin bir "havuzlanabilir obje" olup olmadığını kontrol et.
         IPooledObject pooledObj = objectToSpawn.GetComponent<IPooledObject>();
         if (pooledObj != null)
         {
-            // Eğer öyleyse, ona kendi etiketini söyle ve spawn olduğunu haber ver.
             pooledObj.PoolTag = tag;
             pooledObj.OnObjectSpawn();
         }
@@ -129,16 +174,15 @@ public class ObjectPooler : MonoBehaviour
         return objectToSpawn;
     }
 
-    // YENİ FONKSİYON: Bir objeyi havuza geri almak için kullanılır.
     public void ReturnToPool(string tag, GameObject objectToReturn)
     {
+        // Havuz tur sonunda yok edildiyse, dönmeye çalışan objeyi Destroy et.
         if (!poolDictionary.ContainsKey(tag))
         {
-            Debug.LogWarning("Pool with tag " + tag + " doesn't exist.");
+            Destroy(objectToReturn);
             return;
         }
 
-        // Obje kapatılır ve tekrar kuyruğa eklenir.
         objectToReturn.SetActive(false);
         poolDictionary[tag].Enqueue(objectToReturn);
     }
