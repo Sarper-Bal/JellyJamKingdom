@@ -1,11 +1,11 @@
 /*
  * PLAYER STATS (YÖNETİCİ COMPONENT)
- * * DEĞİŞİKLİKLER (v5 - Davranış):
- * - 'CurrentCanFireWhileMoving' (bool) anlık özelliği eklendi.
- * - 'RecalculateAllStats' metodu, 'baseStatsData'dan bu 'bool' değeri okuyup
- * anlık özelliğe atayacak şekilde güncellendi.
- * - (Bu bir 'stat' değil, bir 'davranış seçeneği' olduğu için
- * şimdilik StatModifier sistemiBUNA uygulanmadı.)
+ * * DEĞİŞİKLİKLER (v6 - Burst Fire):
+ * - 'CurrentProjectilesPerShot' (int) anlık özelliği eklendi.
+ * - 'CurrentBurstFireDelay' (float) anlık özelliği eklendi.
+ * - Bu iki stat için modifier (değiştirici) listeleri eklendi.
+ * - 'RecalculateAllStats' metodu, bu iki yeni stat'ı hesaplayacak şekilde güncellendi.
+ * - Yeni stat'lar için 'Add/Remove' yardımcı metotları eklendi.
  */
 
 using UnityEngine;
@@ -32,10 +32,13 @@ public class PlayerStats : MonoBehaviour
     public float CurrentAttackSpeed { get; private set; }
     public float CurrentAttackRange { get; private set; }
     public int CurrentProjectileDamage { get; private set; }
-    
-    // --- YENİ EKLENEN KISIM BAŞLANGICI (Davranış Seçeneği) ---
-    [Tooltip("Karakterin anlık olarak hareketliyken ateş edip edemeyeceği.")]
     public bool CurrentCanFireWhileMoving { get; private set; }
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
+    [Tooltip("Anlık olarak bir atışta kaç mermi atılacağı.")]
+    public int CurrentProjectilesPerShot { get; private set; }
+    [Tooltip("Anlık olarak burst mermileri arasındaki gecikme.")]
+    public float CurrentBurstFireDelay { get; private set; }
     // --- YENİ EKLENEN KISIM SONU ---
 
 
@@ -49,6 +52,11 @@ public class PlayerStats : MonoBehaviour
     private readonly List<StatModifier> attackSpeedModifiers = new List<StatModifier>();
     private readonly List<StatModifier> attackRangeModifiers = new List<StatModifier>();
     private readonly List<StatModifier> projectileDamageModifiers = new List<StatModifier>();
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
+    private readonly List<StatModifier> projectilesPerShotModifiers = new List<StatModifier>();
+    private readonly List<StatModifier> burstFireDelayModifiers = new List<StatModifier>();
+    // --- YENİ EKLENEN KISIM SONU ---
 
     // Stat'lar değiştiğinde tetiklenecek olay (event).
     public event System.Action OnStatsChanged;
@@ -75,10 +83,6 @@ public class PlayerStats : MonoBehaviour
         if (baseStatsData.characterSprite != null)
         {
             characterGfxRenderer.sprite = baseStatsData.characterSprite;
-        }
-        else
-        {
-            Debug.LogWarning($"PlayerStatsData ({baseStatsData.name}) üzerinde 'Character Sprite' atanmamış.");
         }
     }
 
@@ -120,18 +124,22 @@ public class PlayerStats : MonoBehaviour
         // Int Değerler
         CurrentMaxHealth = (int)CalculateStat(baseStatsData.maxHealth, maxHealthModifiers);
         CurrentProjectileDamage = (int)CalculateStat(baseStatsData.projectileDamage, projectileDamageModifiers);
-
-        // --- YENİ EKLENEN KISIM BAŞLANGICI (Davranış Seçeneği) ---
-        // Bool (Seçenek) Değerler
-        // (Şimdilik modifier sistemi yok, direkt temel değeri okuyoruz)
-        CurrentCanFireWhileMoving = baseStatsData.canFireWhileMoving;
+        
+        // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
+        CurrentProjectilesPerShot = (int)CalculateStat(baseStatsData.projectilesPerShot, projectilesPerShotModifiers);
+        CurrentBurstFireDelay = CalculateStat(baseStatsData.burstFireDelay, burstFireDelayModifiers);
         // --- YENİ EKLENEN KISIM SONU ---
 
+        // Bool (Seçenek) Değerler
+        CurrentCanFireWhileMoving = baseStatsData.canFireWhileMoving;
         
         // Güvenlik kontrolleri
         if (CurrentAttackSpeed <= 0) CurrentAttackSpeed = 0.1f;
         if (CurrentAttackRange < 0) CurrentAttackRange = 0;
         if (CurrentProjectileDamage < 0) CurrentProjectileDamage = 0;
+        if (CurrentProjectilesPerShot < 1) CurrentProjectilesPerShot = 1; // En az 1 mermi atılmalı
+        if (CurrentBurstFireDelay < 0.01f) CurrentBurstFireDelay = 0.01f; // Gecikme çok düşük olmamalı
+        // --- YENİ KONTROLLER EKLENDİ ---
         
         // Değişiklikleri diğer script'lere haber ver
         OnStatsChanged?.Invoke();
@@ -172,4 +180,12 @@ public class PlayerStats : MonoBehaviour
     
     public void AddProjectileDamageModifier(StatModifier mod) => AddModifier(mod, projectileDamageModifiers);
     public bool RemoveProjectileDamageModifiersFromSource(object source) => RemoveModifiersFromSource(source, projectileDamageModifiers);
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
+    public void AddProjectilesPerShotModifier(StatModifier mod) => AddModifier(mod, projectilesPerShotModifiers);
+    public bool RemoveProjectilesPerShotModifiersFromSource(object source) => RemoveModifiersFromSource(source, projectilesPerShotModifiers);
+    
+    public void AddBurstFireDelayModifier(StatModifier mod) => AddModifier(mod, burstFireDelayModifiers);
+    public bool RemoveBurstFireDelayModifiersFromSource(object source) => RemoveModifiersFromSource(source, burstFireDelayModifiers);
+    // --- YENİ EKLENEN KISIM SONU ---
 }

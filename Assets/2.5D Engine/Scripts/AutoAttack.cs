@@ -1,13 +1,20 @@
 /*
- * AUTO ATTACK (TÜKETİCİ)
- * * DEĞİŞİKLİKLER:
- * - 'Update()' metodunun başındaki 'IsMoving' kontrolü güncellendi.
- * - Artık: "Eğer hareket ediyorsam VE playerStats'ım hareketliyken ateş edemez
- * (CurrentCanFireWhileMoving == false) diyorsa" saldırıyı durdur.
- * - Eğer 'CurrentCanFireWhileMoving' true ise, hareket etse bile saldırıya devam eder.
+ * AUTO ATTACK (TETİKLEYİCİ)
+ * * DEĞİŞİKLİKLER (v4 - Burst Fire):
+ * - 'Update()' metodu güncellendi:
+ * - Atış zamanı geldiğinde ('nextFireTime') 'PlayerStats'tan 'CurrentProjectilesPerShot' okunur.
+ * - Eğer sayı 1 ise, 'ProjectileShooter.FireAtPoint()' doğrudan çağrılır (eski sistem).
+ * - Eğer sayı > 1 ise, 'StartCoroutine(PerformBurstFire(...))' çağrılır (yeni sistem).
+ * - 'PerformBurstFire' adında yeni bir private Coroutine eklendi.
+ * - Bu Coroutine, mermileri 'CurrentBurstFireDelay' saniye aralıklarla arka arkaya ateşler.
+ * - 'ProjectileShooter.cs' script'inde HİÇBİR değişiklik gerekmemiştir.
  */
 
 using UnityEngine;
+// --- YENİ EKLENTİ ---
+// Coroutine (IEnumerator) kullanabilmek için bu kütüphane eklendi.
+using System.Collections;
+// --- YENİ EKLENTİ SONU ---
 
 namespace IndianOceanAssets.Engine2_5D
 {
@@ -23,17 +30,19 @@ namespace IndianOceanAssets.Engine2_5D
         private PlayerController playerController;
         private ProjectileShooter projectileShooter;
         private Transform currentTarget;
-        
-        // Player'ın anlık stat'larını tutan component'e referans
         private PlayerStats playerStats;
 
         // Zamanlayıcılar
         private float nextFireTime;
         private float nextTargetSearchTime;
+        
+        // --- YENİ EKLENTİ ---
+        // Zaten bir burst atışı yapılırken yenisini tetiklememek için kontrol bayrağı
+        private bool isFiringBurst = false; 
+        // --- YENİ EKLENTİ SONU ---
 
         private void Awake()
         {
-            // Gerekli bileşenleri en başta alıyoruz.
             playerController = GetComponent<PlayerController>();
             projectileShooter = GetComponent<ProjectileShooter>();
             playerStats = GetComponent<PlayerStats>();
@@ -41,51 +50,86 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Update()
         {
-            // --- DEĞİŞİKLİK BAŞLANGICI ---
-            
             // PlayerStats'tan anlık 'hareketliyken ateş etme' ayarını oku.
             bool canFireWhileMoving = playerStats.CurrentCanFireWhileMoving;
 
-            // Eğer karakter hareket ediyorsa (IsMoving == true)
-            // VE
-            // hareketliyken ateş etme yeteneği YOKSA (canFireWhileMoving == false)
-            // ...o zaman saldırıyı durdur.
+            // Eğer karakter hareket ediyorsa VE hareketliyken ateş edemiyorsa, saldırıyı durdur.
             if (playerController.IsMoving && !canFireWhileMoving)
             {
                 currentTarget = null; // Hedefi unut
                 return; // Saldırı yapma
             }
             
-            // Eğer duruyorsa (IsMoving == false) VEYA
-            // hareketliyken ateş etme yeteneği VARSA (canFireWhileMoving == true),
-            // kod buradan aşağıya normal şekilde devam eder.
-            
-            // --- DEĞİŞİKLİK SONU ---
-
-
-            // Eğer karakter duruyorsa (veya hareketliyken ateş edebiliyorsa):
-            
             // 1. Hedef bulma zamanı geldiyse yeni hedef ara.
             if (Time.time > nextTargetSearchTime)
             {
                 FindNearestEnemy();
-                // Bir sonraki arama zamanını ayarla.
                 nextTargetSearchTime = Time.time + (1f / targetSearchFrequency);
             }
 
-            // 2. Eğer geçerli bir hedefimiz varsa ve ateş etme zamanı geldiyse...
-            if (currentTarget != null && Time.time > nextFireTime)
+            // --- DEĞİŞİKLİK BAŞLANGICI (Burst Fire Mantığı) ---
+            
+            // 2. Eğer geçerli bir hedefimiz varsa, atış zamanı geldiyse VE
+            //    halihazırda bir burst atışı yapmıyorsak...
+            if (currentTarget != null && Time.time > nextFireTime && !isFiringBurst)
             {
-                // Ateş et!
-                projectileShooter.FireAtPoint(currentTarget.position);
+                // Ana saldırı döngüsünün bekleme süresini (Cooldown) AYARLA.
+                // Bir sonraki 'burst' saldırısı ancak bu süre dolduktan sonra başlayabilir.
+                float currentAttackCooldown = 1f / playerStats.CurrentAttackSpeed;
+                nextFireTime = Time.time + currentAttackCooldown;
                 
-                // Bir sonraki ateş etme zamanını ayarla
-                float currentFireRate = 1f / playerStats.CurrentAttackSpeed;
-                nextFireTime = Time.time + currentFireRate;
+                // Stat'lardan mermi sayısını oku
+                int projectilesToFire = playerStats.CurrentProjectilesPerShot;
+
+                if (projectilesToFire <= 1)
+                {
+                    // Mermi sayısı 1 ise: Coroutine'e gerek yok, doğrudan ateşle (Eski sistem)
+                    projectileShooter.FireAtPoint(currentTarget.position);
+                }
+                else
+                {
+                    // Mermi sayısı 1'den fazla ise: Burst Coroutine'ini başlat (Yeni sistem)
+                    float burstDelay = playerStats.CurrentBurstFireDelay;
+                    StartCoroutine(PerformBurstFire(projectilesToFire, burstDelay));
+                }
             }
+            // --- DEĞİŞİKLİK SONU ---
         }
 
-        // En yakın düşmanı bulan optimize edilmiş fonksiyon.
+        /// <summary>
+        /// Belirlenen sayıda mermiyi, belirlenen gecikme ile arka arkaya ateşler.
+        /// </summary>
+        /// <param name="count">Atılacak toplam mermi sayısı</param>
+        /// <param name="delay">Mermiler arasındaki saniye cinsinden gecikme</param>
+        private IEnumerator PerformBurstFire(int count, float delay)
+        {
+            isFiringBurst = true; // Burst atışını başlat, 'Update' tekrar girmesin.
+
+            for (int i = 0; i < count; i++)
+            {
+                // Hedefin hala geçerli olup olmadığını KONTROL ET
+                // (Eğer düşman menzilden çıktıysa veya öldüyse burst'ü yarıda kes)
+                if (currentTarget == null)
+                {
+                    break; // Döngüyü kır
+                }
+                
+                // Hedef hala geçerliyse, ateş et
+                projectileShooter.FireAtPoint(currentTarget.position);
+                
+                // Son mermi değilse, 'delay' kadar bekle
+                if (i < count - 1)
+                {
+                    yield return new WaitForSeconds(delay);
+                }
+            }
+            
+            isFiringBurst = false; // Burst atışı bitti, 'Update' artık yeni bir saldırı başlatabilir.
+        }
+
+        /// <summary>
+        /// En yakın düşmanı bulan optimize edilmiş fonksiyon.
+        /// </summary>
         private void FindNearestEnemy()
         {
             GameObject[] enemies = GameObject.FindGameObjectsWithTag("Enemy");
@@ -97,6 +141,9 @@ namespace IndianOceanAssets.Engine2_5D
 
             foreach (GameObject enemy in enemies)
             {
+                // Güvenlik: Düşman hala aktif mi? (Ölmüş ve havuza dönmüş olabilir)
+                if (!enemy.activeInHierarchy) continue;
+                
                 float distance = Vector3.Distance(transform.position, enemy.transform.position);
                 if (distance < closestDistance)
                 {

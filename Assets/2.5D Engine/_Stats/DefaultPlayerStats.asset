@@ -17,9 +17,11 @@ MonoBehaviour:
   rollForce: 8
   rollCooldown: 1
   maxHealth: 100
+  projectileDamage: 10
   projectileSpeed: 10
   projectileRadius: 1
   attackSpeed: 1
   attackRange: 5
-  projectileDamage: 10
-  canFireWhileMoving: 0
+  canFireWhileMoving: 1
+  projectilesPerShot: 2
+  burstFireDelay: 0.2
