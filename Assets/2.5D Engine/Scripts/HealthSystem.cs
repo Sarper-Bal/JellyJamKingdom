@@ -6,17 +6,9 @@ namespace IndianOceanAssets.Engine2_5D
     // Handles health, damage, and death for entities
     public class HealthSystem : MonoBehaviour, IPooledObject
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
-
         [Header("Stats Data")]
-        // EĞER BU OYUNCU İSE, can verisini bu ScriptableObject'ten çeker.
-        // [SerializeField] private PlayerStatsData playerStats; // ESKİ: Kaldırıldı.
-        
-        // YENİ: PlayerStats component'ine referans. Sadece oyuncu ise kullanılır.
+        // Player ise, PlayerStats component'ine referans
         private PlayerStats playerStatsComponent;
-
-        // --- DEĞİŞİKLİK SONU ---
-
 
         [Header("Fallback Stats (Düşmanlar/Oyuncu-Dışı Varlıklar İçin)")]
         [Tooltip("EĞER 'isPlayer' değilse (yani DÜŞMAN ise), bu can değeri kullanılır.")]
@@ -31,6 +23,8 @@ namespace IndianOceanAssets.Engine2_5D
         
         [Header("Effects & Settings")]
         [SerializeField]
+        [Tooltip("Bu varlık öldüğünde (Die) spawn olacak efekt prefab'ı. " +
+                 "Düşmanlar için, bu prefab'ın adı ObjectPooler'daki 'tag' olarak kullanılacaktır.")]
         private GameObject deathEffect; // Effect prefab on death
 
         [SerializeField]
@@ -47,8 +41,6 @@ namespace IndianOceanAssets.Engine2_5D
         // Initializes health
         private void Start()
         {
-            // --- DEĞİŞİKLİK BAŞLANGICI ---
-            // PlayerStats component'ini bul (eğer oyuncuysa)
             if (isPlayer)
             {
                 playerStatsComponent = GetComponent<PlayerStats>();
@@ -58,18 +50,15 @@ namespace IndianOceanAssets.Engine2_5D
                 }
             }
             
-            // Canı ayarla
             InitializeHealth();
 
-            // YENİ: PlayerStats'taki değişiklikleri dinle
             if (isPlayer && playerStatsComponent != null)
             {
+                // PlayerStats'taki (örn: max can bonusu) değişiklikleri dinle
                 playerStatsComponent.OnStatsChanged += HandlePlayerStatsChanged;
             }
-            // --- DEĞİŞİKLİK SONU ---
         }
 
-        // --- YENİ: Event aboneliğini iptal et ---
         private void OnDestroy()
         {
             // Obje yok olduğunda event dinlemeyi bırak (Memory leak önlemi)
@@ -79,47 +68,37 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- YENİ FONKSİYON ---
-        // PlayerStats'tan gelen "stats değişti" event'ini dinler.
+        /// <summary>
+        /// PlayerStats'tan gelen "stats değişti" event'ini dinler.
+        /// </summary>
         private void HandlePlayerStatsChanged()
         {
-            // Canımızı yeni stat'a göre güncelle
             int oldMaxHealth = currentMaxHealth;
             currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
 
-            // Eğer canımız yeni maksimumu aşıyorsa, onu kırp.
-            // (Örn: Max can 100->80'e düşerse, mevcut can da 80 olmalı)
             if (health > currentMaxHealth)
             {
                 health = currentMaxHealth;
             }
-            // Eğer max can artarsa mevcut canı da arttırabiliriz (opsiyonel)
-            // else if (currentMaxHealth > oldMaxHealth)
-            // {
-            //     health += currentMaxHealth - oldMaxHealth; // Aradaki fark kadar iyileştir
-            // }
 
-            // UI'ı yeni maksimum cana göre güncelle
             if (isPlayer)
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
         }
 
 
-        // Hem Start hem de OnObjectSpawn için ortak can başlatma fonksiyonu.
+        /// <summary>
+        /// Hem Start hem de OnObjectSpawn için ortak can başlatma fonksiyonu.
+        /// </summary>
         private void InitializeHealth()
         {
-            // --- DEĞİŞİKLİK BAŞLANGICI: Canı PlayerStats'tan al ---
             if (isPlayer && playerStatsComponent != null)
             {
-                // Eğer bu OYUNCU ise, canı ScriptableObject yerine PlayerStats component'inden al.
+                // OYUNCU: Canı PlayerStats component'inden al.
                 currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
             }
-            // --- DEĞİŞİKLİK SONU ---
             else
             {
-                // EĞER BU DÜŞMAN İSE veya 'playerStatsComponent' atanmamışsa,
-                // Inspector'daki 'maxHealth' değerini kullan (eski sistem).
-                // BU SAYEDE DÜŞMANLARIN SAĞLIK SİSTEMİ HİÇBİR ŞEKİLDE ETKİLENMEZ.
+                // DÜŞMAN: Canı Inspector'daki 'maxHealth' değerinden al.
                 currentMaxHealth = this.maxHealth;
             }
 
@@ -131,41 +110,72 @@ namespace IndianOceanAssets.Engine2_5D
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
         }
 
-        // Applies damage and checks for death
+        /// <summary>
+        /// Bu varlığa hasar uygular.
+        /// </summary>
         public void Damage(int damageAmount)
         {
             health -= damageAmount;
 
-            // Update UI if player
             if (isPlayer)
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
 
-            // If dead, reload scene if player, then die
             if (health <= 0)
             {
                 if (isPlayer)
-                    HealthUI.Instance.ReloadScene();
+                    HealthUI.Instance.ReloadScene(); // Şimdilik sahneyi yeniden başlat
+                
                 Die();
             }
         }
 
-        // Handles death logic and effects
+        /// <summary>
+        /// Ölüm mantığını ve efektlerini yönetir.
+        /// </summary>
         public void Die()
         {
-            // Eğer bu bir oyuncu değilse (yani bir düşmansa)
+            // --- DEĞİŞİKLİK BAŞLANGICI (Akıllı Ölüm Efekti) ---
             if (!isPlayer)
             {
-                // Ölüm efektini havuzdan çağır.
-                ObjectPooler.Instance.SpawnFromPool("enemyDeath", transform.position + new Vector3(0f, .5f, 0f), Quaternion.identity);
+                // Eğer bu bir DÜŞMAN ise:
+                
+                // 1. Ölüm efekti bu prefab'a atanmış mı?
+                if (deathEffect != null)
+                {
+                    // 2. Efektin prefab adını 'tag' olarak kullanarak havuzdan çağır.
+                    //    (Örn: 'Enemy Death Effect.prefab' -> "Enemy Death Effect" tag'i)
+                    ObjectPooler.Instance.SpawnFromPool(
+                        deathEffect.name, // "enemyDeath" (sabit) yerine prefab'ın adını kullan
+                        transform.position + new Vector3(0f, .5f, 0f), 
+                        Quaternion.identity);
+                }
 
-                // Kendini yok etmek yerine, kendi etiketiyle havuza geri dön.
+                // 3. Kendini yok etmek yerine, kendi etiketiyle havuza geri dön.
+                //    (PoolTag, 'SpawnBurst' içinde 'enemyPrefab.name' olarak atanmıştı)
                 ObjectPooler.Instance.ReturnToPool(PoolTag, gameObject);
             }
-            else // Eğer bu oyuncuysa, eski sistem gibi yok et (şimdilik).
+            // --- DEĞİŞİKLİK SONU ---
+            else 
             {
-                Instantiate(deathEffect, transform.position + new Vector3(0f, .5f, 0f), Quaternion.identity);
+                // Eğer bu OYUNCU ise, eski sistem gibi yok et (şimdilik).
+                if (deathEffect != null)
+                {
+                    Instantiate(deathEffect, transform.position + new Vector3(0f, .5f, 0f), Quaternion.identity);
+                }
                 Destroy(gameObject);
             }
         }
+        
+        // --- YENİ FONKSİYON BAŞLANGICI ---
+        /// <summary>
+        /// WaveManager'ın havuz hesaplaması yapabilmesi için bu prefab'a atanan
+        /// ölüm efekti prefab'ını döndürür.
+        /// </summary>
+        /// <returns>Inspector'da atanan 'deathEffect' prefab'ı.</returns>
+        public GameObject GetDeathEffectPrefab()
+        {
+            return deathEffect;
+        }
+        // --- YENİ FONKSİYON SONU ---
     }
 }
