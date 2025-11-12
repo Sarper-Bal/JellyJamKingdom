@@ -7,6 +7,19 @@ namespace IndianOceanAssets.Engine2_5D
 {
     public class WaveManager : MonoBehaviour
     {
+        // --- YENİ EKLENEN KISIM BAŞLANGICI (Singleton) ---
+        /// <summary>
+        /// WaveManager'a dışarıdan erişim için statik referans (Singleton).
+        /// </summary>
+        public static WaveManager Instance { get; private set; }
+        
+        /// <summary>
+        /// Tüm dalgalar boyunca spawn olacak toplam düşman sayısı.
+        /// ObjectPooler bu sayıyı okuyarak 'enemy' havuzunu oluşturur.
+        /// </summary>
+        public int CalculatedEnemyPoolSize { get; private set; }
+        // --- YENİ EKLENEN KISIM SONU ---
+
         [Tooltip("Bu seviyede oynanacak dalga profillerinin listesi.")]
         [SerializeField] private List<WaveProfile> waves;
 
@@ -23,21 +36,123 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Awake()
         {
+            // --- YENİ EKLENEN KISIM BAŞLANGICI (Singleton ve Hesaplama) ---
+            
+            // Singleton kurulumu
+            if (Instance != null && Instance != this)
+            {
+                Debug.LogWarning("Sahnede birden fazla WaveManager bulundu. Bu kopya yok ediliyor.");
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+
+            // RoundManager referansını al (Start'tan taşındı)
+            if (roundManager == null)
+            {
+                roundManager = FindObjectOfType<RoundManager>();
+            }
+
+            // ObjectPooler'ın 'Start' metodundan önce çalışarak
+            // ihtiyaç duyulan havuz boyutunu hesapla.
+            CalculateWorstCaseEnemyPoolSize();
+            
+            // --- YENİ EKLENEN KISIM SONU ---
+
             // Sahnedeki tüm spawn noktalarını bul ve ID'lerini anahtar olarak kullanarak sözlüğe ekle.
             spawnPoints = FindObjectsOfType<EnemySpawnPoint>().ToDictionary(sp => sp.spawnPointID);
         }
 
         private void Start()
         {
-            if (roundManager == null)
-            {
-                // RoundManager'ı sahnede bul (eğer Inspector'dan atanmadıysa).
-                roundManager = FindObjectOfType<RoundManager>();
-            }
-
+            // (RoundManager kontrolü Awake'e taşındı)
+            
             // İlk dalgayı başlat.
             StartNextWave();
         }
+        
+        // --- YENİ EKLENEN FONKSİYON BAŞLANGICI ---
+        /// <summary>
+        /// 'waves' listesindeki tüm WaveProfile'ları analiz eder ve
+        /// 'roundDuration' süresi boyunca spawn olacak toplam düşman sayısını hesaplar.
+        /// Bu, ObjectPooler için en kötü durum (worst-case) senaryosudur.
+        /// </summary>
+        private void CalculateWorstCaseEnemyPoolSize()
+        {
+            // Gerekli referanslar yoksa hesaplama yapma
+            if (roundManager == null)
+            {
+                Debug.LogError("WaveManager, havuz boyutunu hesaplamak için RoundManager referansını bulamadı!");
+                CalculatedEnemyPoolSize = 20; // Hata durumunda varsayılan boyut
+                return;
+            }
+            if (waves == null || waves.Count == 0)
+            {
+                Debug.LogWarning("WaveManager'a hiç dalga profili (WaveProfile) atanmamış. Havuz boyutu 20 olarak ayarlandı.");
+                CalculatedEnemyPoolSize = 20; // Hata durumunda varsayılan boyut
+                return;
+            }
+
+            float roundDuration = roundManager.RoundDuration;
+            int totalEnemies = 0;
+
+            // Atanan tüm dalga profillerini döngüye al
+            foreach (WaveProfile wave in waves)
+            {
+                // Dalga içindeki tüm spawn olaylarını döngüye al
+                foreach (SpawnEvent spawnEvent in wave.spawnEvents)
+                {
+                    if (spawnEvent.isPeriodic)
+                    {
+                        // Bu periyodik (tekrarlanan) bir olay
+                        
+                        // Hata önleme: repeatInterval çok küçükse (veya 0 ise) sonsuz döngüye girer.
+                        // Bunu tek seferlik gibi kabul et.
+                        if (spawnEvent.repeatInterval <= 0.1f) 
+                        {
+                            totalEnemies += spawnEvent.count;
+                        }
+                        else
+                        {
+                            // Olayın aktif olacağı süreyi hesapla (tur süresi - başlama zamanı)
+                            float activeDuration = roundDuration - spawnEvent.triggerTime;
+                            
+                            if (activeDuration > 0)
+                            {
+                                // Kaç kez tekrarlanacağını hesapla (+1, triggerTime anındaki ilk spawn'ı da saymak için)
+                                int repetitions = Mathf.FloorToInt(activeDuration / spawnEvent.repeatInterval) + 1;
+                                
+                                // Toplam düşman = (tekrar sayısı) * (her tekrardaki düşman sayısı)
+                                totalEnemies += spawnEvent.count * repetitions;
+                            }
+                            // else: Olay, tur bittikten sonra başlıyor, o yüzden hiç spawn olmayacak.
+                        }
+                    }
+                    else
+                    {
+                        // Bu tek seferlik bir olay
+                        totalEnemies += spawnEvent.count;
+                    }
+                }
+            }
+
+            // Hesaplanan değeri public değişkene ata
+            CalculatedEnemyPoolSize = totalEnemies;
+            
+            // Güvenlik önlemi: Eğer hesaplanan sayı 0 ise (örn: profiller boşsa)
+            // en azından küçük bir havuz oluştur.
+            if (CalculatedEnemyPoolSize == 0)
+            {
+                Debug.LogWarning("Dalga profilleri analiz edildi ancak spawn olacak hiç düşman bulunamadı. Havuz boyutu 20 olarak ayarlandı.");
+                CalculatedEnemyPoolSize = 20;
+            }
+            else
+            {
+                Debug.Log($"ObjectPooler için hesaplanan 'enemy' havuz boyutu: {CalculatedEnemyPoolSize}");
+            }
+        }
+        // --- YENİ EKLENEN FONKSİYON SONU ---
+
 
         private void Update()
         {
@@ -53,8 +168,6 @@ namespace IndianOceanAssets.Engine2_5D
             // Aktif dalganın içindeki her bir olayı kontrol et.
             for (int i = 0; i < currentWave.spawnEvents.Count; i++)
             {
-                // --- DEĞİŞİKLİK BAŞLANGICI: Spawn Tetikleme Mantığı ---
-
                 // Ana saat (TimeElapsed), bu olayın sıradaki tetiklenme zamanını (nextEventTriggerTimes[i]) geçti mi?
                 if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
                 {
@@ -67,20 +180,16 @@ namespace IndianOceanAssets.Engine2_5D
                     // Şimdi bir sonraki tetiklenme zamanını hesapla
                     if (currentEvent.isPeriodic)
                     {
-                        // EĞER BU PERİYODİK BİR OLAYSA (eski sistem gibi):
-                        // Bir sonraki tetiklenme zamanını 'repeatInterval' kullanarak ayarla.
-                        // (Eğer repeatInterval 0 ise, bir sonraki frame tekrar tetiklenir, dikkatli kullanılmalı)
+                        // EĞER BU PERİYODİK BİR OLAYSA:
                         nextEventTriggerTimes[i] += currentEvent.repeatInterval;
                     }
                     else
                     {
-                        // EĞER BU TEK SEFERLİK BİR OLAYSA (yeni özellik):
-                        // Bir daha tetiklenmemesi için bir sonraki tetiklenme zamanını
-                        // ulaşılamaz bir değere (float.MaxValue veya Mathf.Infinity) ayarla.
+                        // EĞER BU TEK SEFERLİK BİR OLAYSA:
+                        // Bir daha tetiklenmemesi için ulaşılamaz bir değere ayarla.
                         nextEventTriggerTimes[i] = Mathf.Infinity;
                     }
                 }
-                // --- DEĞİŞİKLİK SONU ---
             }
         }
 
@@ -94,14 +203,11 @@ namespace IndianOceanAssets.Engine2_5D
                 // Zaman takip listesini sıfırla ve ilk tetiklenme zamanlarını ayarla.
                 nextEventTriggerTimes = new List<float>();
 
-                // --- DEĞİŞİKLİK BAŞLANGICI: İlk Tetiklenme Zamanı Ayarı ---
                 foreach (var spawnEvent in currentWave.spawnEvents)
                 {
-                    // Her olayın ilk tetiklenme zamanı, artık 'startDelay' değil, 'triggerTime' olacak.
-                    // Bu sayede olay 5. saniyede de başlasa, 20. saniyede de başlasa doğru zamanda tetiklenecek.
+                    // Her olayın ilk tetiklenme zamanı 'triggerTime' olacak.
                     nextEventTriggerTimes.Add(spawnEvent.triggerTime);
                 }
-                // --- DEĞİŞİKLİK SONU ---
 
                 currentWaveIndex++;
                 waveActive = true;
@@ -116,26 +222,28 @@ namespace IndianOceanAssets.Engine2_5D
         // Bir "patlama" (burst) şeklinde düşman spawn eden Coroutine.
         private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
         {
-            // Belirtilen ID'de bir spawn noktası var mı kontrol et.
             if (!spawnPoints.ContainsKey(spawnEvent.spawnPointID))
             {
                 Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı! Düşman spawn edilemiyor.");
                 yield break; // Coroutine'i sonlandır.
             }
 
-            // Doğru spawn noktasını sözlükten al.
             EnemySpawnPoint spawnPoint = spawnPoints[spawnEvent.spawnPointID];
 
-            // Olayın 'count' (adet) değeri kadar döngüye gir.
             for (int i = 0; i < spawnEvent.count; i++)
             {
                 // ObjectPooler'dan "enemy" etiketli bir düşman çağır.
-                // NOT: Gelecekte, farklı düşman türleri için `spawnEvent.enemyPrefab`'ı kullanarak
-                // ObjectPooler'dan "enemy_boss", "enemy_fast" gibi farklı tag'ler isteyebiliriz.
-                // Şimdilik mevcut "enemy" tag'ini kullanan sistemi koruyoruz.
-                ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
+                GameObject spawnedEnemy = ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
                 
-                // İki düşman arasında 'spawnInterval' kadar bekle (eğer 0 değilse).
+                // --- Güvenlik Kontrolü ---
+                // Eğer havuz boşaldıysa (hesaplamaya rağmen bir sorun olduysa)
+                // SpawnFromPool null dönebilir. Bu durumda Coroutine'i durdur.
+                if (spawnedEnemy == null)
+                {
+                     Debug.LogError($"'enemy' havuzu boşaldı! Hesaplanan boyut ({CalculatedEnemyPoolSize}) yetersiz kalmış olabilir. Spawn işlemi durduruldu.");
+                     yield break;
+                }
+                
                 yield return new WaitForSeconds(spawnEvent.spawnInterval);
             }
         }
