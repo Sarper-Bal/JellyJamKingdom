@@ -24,7 +24,7 @@ MonoBehaviour:
     spawnPointID: 1
     triggerTime: 5
     isPeriodic: 1
-    repeatInterval: 5
+    repeatInterval: 1
     count: 1
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}

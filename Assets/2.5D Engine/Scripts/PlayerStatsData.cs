@@ -33,10 +33,14 @@ public class PlayerStatsData : ScriptableObject
     public float attackSpeed = 2f; 
     [Tooltip("Otomatik saldırının düşmanları hedef alacağı maksimum menzil.")]
     public float attackRange = 10f;
-    
+
     // --- YENİ EKLENEN KISIM BAŞLANGICI ---
     // Hasar miktarını HealthSystem.Damage() metodu 'int' aldığı için 'int' olarak tutmak daha sağlıklıdır.
     [Tooltip("Merminin (Projectile) düşmanlara vereceği temel hasar miktarı.")]
     public int projectileDamage = 10;
     // --- YENİ EKLENEN KISIM SONU ---
-}
+    [Header("Combat Settings")]
+    [Tooltip("Eğer bu 'True' ise, karakter hareket ederken de otomatik saldırı yapmaya devam eder. " +
+             "'False' ise, hareket ettiği anda saldırıyı keser.")]
+    public bool canFireWhileMoving = false; // Varsayılan olarak 'false' (eski sistem gibi)
+}   

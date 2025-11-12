@@ -21,3 +21,5 @@ MonoBehaviour:
   projectileRadius: 1
   attackSpeed: 1
   attackRange: 5
+  projectileDamage: 10
+  canFireWhileMoving: 0
