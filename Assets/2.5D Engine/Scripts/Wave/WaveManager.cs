@@ -1,12 +1,11 @@
 /*
- * WAVE MANAGER (YÖNETİCİ MODELİ)
+ * WAVE MANAGER (YÖNETİCİ MODELİ - v2)
  * * DEĞİŞİKLİKLER:
- * - Artık 'ObjectPooler'a güvenmek yerine ona aktif olarak komut veriyor.
- * - 'Start()' içinde 'ObjectPooler.Instance.CreatePool' çağrısını yapıyor.
- * - 'enemyPrefab' referansını Inspector'dan alıyor (Pooler'a hangi prefab'ı vereceğini bilmek için).
- * - 'Awake' içindeki hesaplama mantığı 'Start'a taşındı (ObjectPooler.Instance'ın hazır olmasını garantilemek için).
- * - 'StopAndCleanupWaves' metodu eklendi. Bu metot, spawn'ı durdurur, Coroutine'leri temizler
- * ve ObjectPooler'a 'DestroyPool' komutunu gönderir.
+ * - 'enemyPrefab' referansına ek olarak 'enemyDeathEffectPrefab' referansı eklendi.
+ * - 'Start()' metodu: Artık 'enemy' havuzunu oluştururken, 'enemyDeath' havuzunu da
+ * aynı 'CalculatedEnemyPoolSize' ile birlikte oluşturuyor.
+ * - 'StopAndCleanupWaves()' metodu: Artık 'enemy' havuzunu yok ederken,
+ * 'enemyDeath' havuzunu da (eğer varsa) yok ediyor.
  */
 
 using UnityEngine;
@@ -32,7 +31,12 @@ namespace IndianOceanAssets.Engine2_5D
         
         [Header("References")]
         [Tooltip("Dalgalarda spawn edilecek DÜŞMAN prefab'ı.")]
-        [SerializeField] private GameObject enemyPrefab; // YENİ: Inspector'dan atanmalı
+        [SerializeField] private GameObject enemyPrefab; 
+
+        // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+        [Tooltip("Düşman öldüğünde 'HealthSystem' tarafından kullanılacak ÖLÜM EFEKTİ prefab'ı.")]
+        [SerializeField] private GameObject enemyDeathEffectPrefab; // YENİ: Inspector'dan atanmalı
+        // --- YENİ EKLENEN KISIM SONU ---
 
         [Tooltip("Turun süresi gibi bilgileri almak için RoundManager referansı.")]
         [SerializeField] private RoundManager roundManager;
@@ -67,8 +71,6 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Start()
         {
-            // --- DEĞİŞİKLİK BAŞLANGICI (Havuz Oluşturma Akışı) ---
-            
             // 1. RoundManager referansını al
             if (roundManager == null)
             {
@@ -78,21 +80,41 @@ namespace IndianOceanAssets.Engine2_5D
             // 2. Havuz boyutunu hesapla
             CalculateWorstCaseEnemyPoolSize();
             
-            // 3. Gerekli prefab'ın atandığını kontrol et
+            // 3. Gerekli prefab'ların atandığını kontrol et
             if (enemyPrefab == null)
             {
                 Debug.LogError("WaveManager üzerinde 'Enemy Prefab' atanmamış! " +
                                "Havuz oluşturulamıyor ve dalgalar başlatılamıyor.");
                 return;
             }
+            // --- YENİ KONTROL EKLENDİ ---
+            if (enemyDeathEffectPrefab == null)
+            {
+                // Bu bir hata değil, uyarı. Belki ölüm efekti olmayan bir düşman istiyoruzdur.
+                Debug.LogWarning("WaveManager üzerinde 'Enemy Death Effect Prefab' atanmamış. " +
+                                 "'enemyDeath' havuzu oluşturulmayacak.");
+            }
+            // --- YENİ KONTROL SONU ---
 
-            // 4. ObjectPooler servisine 'enemy' havuzunu oluşturması için komut ver
+
+            // 4. ObjectPooler servisine DİNAMİK havuzları oluşturması için komut ver
+            
+            // Düşman havuzunu oluştur
             ObjectPooler.Instance.CreatePool("enemy", enemyPrefab, CalculatedEnemyPoolSize);
+
+            // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+            // Düşman Ölüm Efekti havuzunu oluştur (eğer prefab atandıysa)
+            if (enemyDeathEffectPrefab != null)
+            {
+                // 'enemyDeath' havuzunu da 'enemy' havuzuyla AYNI BOYUTTA oluşturuyoruz.
+                // Çünkü en kötü senaryoda her düşman için bir ölüm efekti gerekir.
+                ObjectPooler.Instance.CreatePool("enemyDeath", enemyDeathEffectPrefab, CalculatedEnemyPoolSize);
+            }
+            // --- YENİ EKLENEN KISIM SONU ---
+
 
             // 5. Her şey hazır olduğuna göre, ilk dalgayı başlat.
             StartNextWave();
-            
-            // --- DEĞİŞİKLİK SONU ---
         }
         
         /// <summary>
@@ -119,7 +141,7 @@ namespace IndianOceanAssets.Engine2_5D
 
             foreach (WaveProfile wave in waves)
             {
-                if (wave == null) continue; // Atanmamış (null) bir dalga profili varsa atla
+                if (wave == null) continue; 
                 
                 foreach (SpawnEvent spawnEvent in wave.spawnEvents)
                 {
@@ -141,7 +163,6 @@ namespace IndianOceanAssets.Engine2_5D
                     }
                     else
                     {
-                        // Tek seferlik olay (ve tur süresi içinde tetikleniyorsa)
                         if(spawnEvent.triggerTime <= roundDuration)
                         {
                             totalEnemies += spawnEvent.count;
@@ -159,48 +180,48 @@ namespace IndianOceanAssets.Engine2_5D
             }
             else
             {
-                Debug.Log($"ObjectPooler için hesaplanan 'enemy' havuz boyutu: {CalculatedEnemyPoolSize}");
+                Debug.Log($"ObjectPooler için hesaplanan dinamik havuz boyutu (enemy & enemyDeath): {CalculatedEnemyPoolSize}");
             }
         }
         
         
-        // --- YENİ FONKSİYON BAŞLANGICI ---
         /// <summary>
-        /// Düşman spawn etmeyi durdurur ve 'enemy' havuzunu temizlemesi için ObjectPooler'a komut verir.
-        /// Bu metot, 'RoundManager' tarafından tur bittiğinde (kazanma) çağrılır.
+        /// Düşman spawn etmeyi durdurur ve dinamik havuzları ('enemy', 'enemyDeath')
+        /// temizlemesi için ObjectPooler'a komut verir.
         /// </summary>
         public void StopAndCleanupWaves()
         {
-            // 1. Update() içindeki spawn döngüsünü durdur
             waveActive = false;
-            
-            // 2. Halen çalışmakta olan SpawnBurst Coroutine'lerini durdur
-            //    (Bu, tur biterken yeni düşmanların spawn olmaya devam etmesini engeller)
             StopAllCoroutines();
             
-            // 3. ObjectPooler'a 'enemy' havuzunu yok etme komutu ver
             if (ObjectPooler.Instance != null)
             {
+                // "enemy" havuzunu yok et
                 ObjectPooler.Instance.DestroyPool("enemy");
+                
+                // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+                // "enemyDeath" havuzunu da yok et
+                // (Eğer 'enemyDeathEffectPrefab' null idiyse, bu havuz hiç oluşmamıştı
+                // ve 'DestroyPool' metodu uyarı verip güvenli bir şekilde çıkacaktır.
+                // Bu yüzden 'if' kontrolüne gerek yok.)
+                ObjectPooler.Instance.DestroyPool("enemyDeath");
+                // --- YENİ EKLENEN KISIM SONU ---
             }
             
-            Debug.Log("WaveManager: Dalgalar durduruldu ve 'enemy' havuzu temizlendi.");
+            Debug.Log("WaveManager: Dinamik dalga havuzları (enemy, enemyDeath) durduruldu ve temizlendi.");
         }
-        // --- YENİ FONKSİYON SONU ---
 
 
         private void Update()
         {
-            // Tur veya dalga aktif değilse (waveActive = false) hiçbir şey yapma.
             if (!waveActive || !roundManager.IsRoundActive)
             {
                 return;
             }
 
-            // Mevcut dalga profilini al.
             WaveProfile currentWave = waves[currentWaveIndex - 1];
+            if (currentWave == null) return; // Güvenlik kontrolü
 
-            // Aktif dalganın içindeki her bir olayı kontrol et.
             for (int i = 0; i < currentWave.spawnEvents.Count; i++)
             {
                 if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
@@ -227,7 +248,6 @@ namespace IndianOceanAssets.Engine2_5D
                 Debug.Log($"Dalga {currentWaveIndex + 1} başlıyor!");
                 WaveProfile currentWave = waves[currentWaveIndex];
 
-                // currentWave'in null olup olmadığını kontrol et
                 if (currentWave == null)
                 {
                      Debug.LogError($"Dalga {currentWaveIndex + 1} (index {currentWaveIndex}) 'waves' listesinde atanmamış (null).");
@@ -263,9 +283,6 @@ namespace IndianOceanAssets.Engine2_5D
 
             for (int i = 0; i < spawnEvent.count; i++)
             {
-                // 'enemy' tag'ini kullanan eski prefab referansı yerine,
-                // WaveManager'a atadığımız 'enemyPrefab'in tag'ini kullanalım.
-                // Not: Pool'u "enemy" tag'i ile oluşturduğumuz için burada "enemy" kullanmak doğrudur.
                 GameObject spawnedEnemy = ObjectPooler.Instance.SpawnFromPool("enemy", spawnPoint.transform.position, Quaternion.identity);
                 
                 if (spawnedEnemy == null)

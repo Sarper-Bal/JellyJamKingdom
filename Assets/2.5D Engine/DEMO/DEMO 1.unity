@@ -4980,6 +4980,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+  enemyDeathEffectPrefab: {fileID: 4806121257990350900, guid: 8ba56a88eb8db7342a07b8f07085b2f8, type: 3}
   roundManager: {fileID: 1979538491}
   waves:
   - {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
@@ -8068,10 +8069,6 @@ MonoBehaviour:
     isDynamicallyManaged: 0
   - tag: explosion
     prefab: {fileID: 5745667949009842635, guid: f00c38ffa516d9b4d9e593f809bbf9df, type: 3}
-    size: 50
-    isDynamicallyManaged: 0
-  - tag: enemyDeath
-    prefab: {fileID: 4806121257990350900, guid: 8ba56a88eb8db7342a07b8f07085b2f8, type: 3}
     size: 50
     isDynamicallyManaged: 0
 --- !u!4 &1592796606
