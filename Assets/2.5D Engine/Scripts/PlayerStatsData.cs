@@ -8,6 +8,12 @@ public class PlayerStatsData : ScriptableObject
     // ScriptableObject'lar, MonoBehaviour gibi çalışmayan, sadece veri tutan
     // özel class'lardır. Oyunun dengesini (balancing) buradan yapacağız.
 
+    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+    [Header("Visuals")]
+    [Tooltip("Karakterin 'GFX' objesinde kullanılacak ana görünümü (Sprite).")]
+    public Sprite characterSprite;
+    // --- YENİ EKLENEN KISIM SONU ---
+
     [Header("Movement Stats")]
     [Tooltip("Karakterin saniyedeki hareket hızı.")]
     public float moveSpeed = 5f;
@@ -27,10 +33,6 @@ public class PlayerStatsData : ScriptableObject
     public float projectileRadius = 1f;
     [Tooltip("Saniyede kaç atış yapılacağı (Atış Aralığı = 1 / Saldırı Hızı).")]
     public float attackSpeed = 2f; 
-
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
-    // AutoAttack.cs'teki sabit 'attackRange = 10f' değerini buraya taşıdık.
     [Tooltip("Otomatik saldırının düşmanları hedef alacağı maksimum menzil.")]
     public float attackRange = 10f;
-    // --- YENİ EKLENEN KISIM SONU ---
 }
