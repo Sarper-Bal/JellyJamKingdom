@@ -1,11 +1,13 @@
 /*
  * PROJECTILE SHOOTER (VERİ AKTARICI)
- * * DEĞİŞİKLİKLER (v1.1 - Boyut Hatası Düzeltmesi):
- * - 'FlipTowards' metodu, 'transform.localScale = new Vector3(1, 1, 1)'
- * kullanarak karakterin boyutunu EZECEK şekilde hatalı çalışıyordu.
- * - Metot, artık 'currentScale.x' değerini 'Mathf.Abs' kullanarak
- * mevcut boyutu (scale) koruyacak ve sadece yönünü (+ veya -)
- * değiştirecek şekilde güncellendi.
+ * * DEĞİŞİKLİKLER (v2.0 - Fire Point):
+ * - 'firePoint' adında opsiyonel bir 'Transform' referansı eklendi.
+ * - 'FireAtPoint' metodu güncellendi:
+ * - Artık mermiyi 'transform.position' yerine 'spawnPosition'dan ateşliyor.
+ * - 'spawnPosition' değeri, 'firePoint' atanmışsa 'firePoint.position',
+ * atanmamışsa (null ise) 'transform.position' olarak belirleniyor.
+ * - Bu sayede script, hem Player (silah ucuyla) hem de Kule (pivot noktasıyla)
+ * için esnek bir şekilde kullanılabilir.
  */
 
 using UnityEngine;
@@ -16,7 +18,15 @@ namespace IndianOceanAssets.Engine2_5D
     public class ProjectileShooter : MonoBehaviour
     {
         [Header("Prefab")]
+        [Tooltip("Havuzdan 'projectile' tag'i ile çağrılacak mermi prefab'ı.")]
         [SerializeField] private GameObject projectilePrefab; 
+
+        // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+        [Header("Configuration")]
+        [Tooltip("(Opsiyonel) Merminin çıkacağı özel nokta (örn: silahın namlu ucu). " +
+                 "Eğer boş bırakılırsa, bu objenin kendi 'transform.position'u (pivot noktası) kullanılır.")]
+        [SerializeField] private Transform firePoint;
+        // --- YENİ EKLENEN KISIM SONU ---
 
         // Player'ın anlık stat'larını yöneten component'e referans
         private PlayerStats playerStats; 
@@ -33,9 +43,21 @@ namespace IndianOceanAssets.Engine2_5D
         /// </summary>
         public void FireAtPoint(Vector3 targetPoint)
         {
-            // Mermiyi havuzdan "projectile" etiketiyle spawn et
-            // (ObjectPooler'daki statik listeye 'projectile' eklediğinizden emin olun)
-            GameObject projectileGO = ObjectPooler.Instance.SpawnFromPool("projectile", transform.position, Quaternion.identity);
+            // --- DEĞİŞİKLİK BAŞLANGICI (Spawn Pozisyonu) ---
+            
+            // 1. Merminin nereden spawn olacağına karar ver.
+            //    'firePoint' atanmışsa orayı, atanmamışsa (null ise) bu objenin
+            //    kendi pozisyonunu (transform.position) kullan.
+            Vector3 spawnPosition = (firePoint != null) ? firePoint.position : transform.position;
+            
+            // 2. Mermiyi havuzdan bu hesaplanmış 'spawnPosition' ile çağır.
+            GameObject projectileGO = ObjectPooler.Instance.SpawnFromPool(
+                "projectile", 
+                spawnPosition, // 'transform.position' yerine 'spawnPosition' kullan
+                Quaternion.identity
+            );
+            
+            // --- DEĞİŞİKLİK SONU ---
 
             if (projectileGO != null)
             {
@@ -66,37 +88,27 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- HATA DÜZELTMESİ BURADA ---
         /// <summary>
         /// Karakterin sprite'ını (veya GFX objesini) hedefe göre çevirir.
         /// 'localScale' değerini ezmeden, sadece 'x' ekseninin yönünü değiştirir.
+        /// (Bu, bir önceki "boyut sıfırlanma" hatası için düzeltmeyi içerir)
         /// </summary>
-        /// <param name="target">Hedefin pozisyonu</param>
         private void FlipTowards(Vector3 target)
         {
-            // 1. Mevcut scale değerini oku (örn: (0.8, 0.8, 1))
             Vector3 currentScale = transform.localScale;
-
-            // 2. Mevcut X scale'inin büyüklüğünü (mutlak değerini) al
-            //    (Eğer scale -0.8 ise, 'scaleMagnitudeX' 0.8 olur)
             float scaleMagnitudeX = Mathf.Abs(currentScale.x);
             
-            // 3. Hedefin konumuna göre sadece 'x' değerini güncelle
             if (target.x > transform.position.x)
             {
-                // Hedef sağda: x yönünü pozitif yap (örn: 0.8)
-                currentScale.x = scaleMagnitudeX;
+                currentScale.x = scaleMagnitudeX; // Hedef sağda: Yönü pozitif yap
             }
             else
             {
-                // Hedef solda: x yönünü negatif yap (örn: -0.8)
-                currentScale.x = -scaleMagnitudeX;
+                currentScale.x = -scaleMagnitudeX; // Hedef solda: Yönü negatif yap
             }
-
-            // 4. Sadece 'x' yönü güncellenmiş olan scale'i geri ata.
-            //    'y' ve 'z' boyutları korunmuş olur.
+            
+            // Sadece 'x' yönü güncellenmiş olan scale'i geri ata.
             transform.localScale = currentScale;
         }
-        // --- HATA DÜZELTMESİ SONU ---
     }
 }
