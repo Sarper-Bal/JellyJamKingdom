@@ -9,17 +9,16 @@ namespace IndianOceanAssets.Engine2_5D
     [RequireComponent(typeof(SwordAttack))]
     [RequireComponent(typeof(ProjectileShooter))]
     [RequireComponent(typeof(PlayerInputHandler))]
-    [RequireComponent(typeof(PlayerStats))] // YENİ: PlayerStats component'ini zorunlu kıl
-    public class PlayerController : MonoBehaviour
+    [RequireComponent(typeof(PlayerStats))] 
+    
+    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
+    // 'IAttackStateProvider' arayüzünü uyguladığımızı (implemente ettiğimizi) belirtiyoruz.
+    public class PlayerController : MonoBehaviour, IAttackStateProvider
+    // --- YENİ EKLENEN KISIM SONU ---
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
         [Header("Stats Data")]
-        // [SerializeField] private PlayerStatsData statsData; // ESKİ: Kaldırıldı
-        
-        // YENİ: Player'ın anlık stat'larını yöneten component'e referans
+        // Player'ın anlık stat'larını yöneten component'e referans
         private PlayerStats playerStats;
-        // --- DEĞİŞİKLİK SONU ---
-
 
         [Header("Attack Settings")]
         [SerializeField] private AttackType attackType;
@@ -45,25 +44,18 @@ namespace IndianOceanAssets.Engine2_5D
             rb = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputHandler = GetComponent<PlayerInputHandler>();
-            
-            // --- DEĞİŞİKLİK BAŞLANGICI ---
-            // statsData referansı yerine PlayerStats component'ini al
-            playerStats = GetComponent<PlayerStats>();
-            // --- DEĞİŞİKLİK SONU ---
+            playerStats = GetComponent<PlayerStats>(); // Referansı Awake'te al
             
             Application.targetFrameRate = 60;
         }
 
         private void Start()
         {
-            // Başlangıçta hangi saldırı tipi seçildiyse onu aktif et, diğerini kapat.
             if (attackType == AttackType.SwordSlash)
                 GetComponent<SwordAttack>().enabled = true;
             else
                 GetComponent<ProjectileShooter>().enabled = true;
                 
-            // GÜVENLİK ÖNLEMİ
-            // --- DEĞİŞİKLİK: statsData yerine playerStats kontrolü ---
             if(playerStats == null)
             {
                 Debug.LogError("PlayerController üzerinde 'PlayerStats' component'i bulunamadı!");
@@ -72,11 +64,10 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void Update()
         {
-            // Input'u her frame oku.
             inputDirection = inputHandler.MoveInput;
             
-            // Hareket girdisi varsa IsMoving true, yoksa false olacak.
-            // (Bu değişken AutoAttack script'i tarafından kullanılıyor)
+            // IsMoving bayrağını güncelle.
+            // (Bu, AutoAttack tarafından değil, animasyon ve Move() tarafından kullanılır)
             IsMoving = inputDirection != Vector2.zero;
 
             if (!isRolling)
@@ -84,25 +75,45 @@ namespace IndianOceanAssets.Engine2_5D
                 AnimateMovement();
                 FlipCharacter();
             }
-
-            // --- Gelecek Planı (Roll Mekaniği) ---
-            // Buraya 'Roll' tuşuna basıldığında 'AttemptRoll()' fonksiyonunu
-            // çağıran kodu (PlayerInputHandler'dan gelen event ile) ekleyeceğiz.
         }
 
         private void FixedUpdate()
         {
-            // Fizik güncellemeleri FixedUpdate'te yapılır.
             if (!isRolling)
                 Move();
         }
 
+        // --- YENİ EKLENEN FONKSİYON BAŞLANGICI ---
+        /// <summary>
+        /// IAttackStateProvider arayüzünden gelen zorunlu metot.
+        /// AutoAttack'a saldırıp saldıramayacağını söyler.
+        /// </summary>
+        /// <returns>True (saldırabilir), False (saldıramaz)</returns>
+        public bool CanAttack()
+        {
+            // PlayerStats'tan "hareketliyken ateş etme" ayarını oku
+            bool canFireWhileMoving = playerStats.CurrentCanFireWhileMoving;
+
+            // Eğer hareket ediyorsam VE hareketliyken ateş etme yeteneğim YOKSA,
+            // saldıramam.
+            if (IsMoving && !canFireWhileMoving)
+            {
+                return false; 
+            }
+
+            // (Gelecekte buraya 'isStunned' (sersemlemiş) gibi başka kontroller de ekleyebilirsin)
+            // if (isStunned) return false;
+
+            // Diğer tüm durumlarda (duruyorsam VEYA hareketliyken ateş edebiliyorsam)
+            // saldırabilirim.
+            return true;
+        }
+        // --- YENİ EKLENEN FONKSİYON SONU ---
+
         private void Move()
         {
-            // GÜVENLİK ÖNLEMİ
             if (playerStats == null) return; 
 
-            // --- DEĞİŞİKLİK: 'statsData.moveSpeed' yerine 'playerStats.CurrentMoveSpeed' kullan ---
             Vector3 movement = new Vector3(inputDirection.x, 0f, inputDirection.y) * playerStats.CurrentMoveSpeed * Time.fixedDeltaTime;
             rb.MovePosition(rb.position + movement);
         }
@@ -121,14 +132,10 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- Gelecek Planı (Roll Mekaniği) ---
-        // Bu fonksiyonu public yapıp, tuşa basıldığında çağıracağız.
         public void AttemptRoll()
         {
-            // GÜVENLİK ÖNLEMİ
             if (playerStats == null) return;
             
-            // --- DEĞİŞİKLİK: 'statsData.rollCooldown' yerine 'playerStats.CurrentRollCooldown' kullan ---
             if(Time.time > lastRollTime + playerStats.CurrentRollCooldown && !isRolling)
             {
                 StartCoroutine(PerformRoll());
@@ -137,7 +144,6 @@ namespace IndianOceanAssets.Engine2_5D
 
         private IEnumerator PerformRoll()
         {
-            // GÜVENLİK ÖNLEMİ
             if (playerStats == null)
             {
                 isRolling = false;
@@ -145,20 +151,17 @@ namespace IndianOceanAssets.Engine2_5D
             }
                 
             isRolling = true;
-            // --- DEĞİŞİKLİK: 'statsData.rollCooldown' yerine 'playerStats.CurrentRollCooldown' kullan ---
-            lastRollTime = Time.time; // Cooldown'u başlat
+            lastRollTime = Time.time; 
             
             Vector3 rollDir = new Vector3(inputDirection.x, 0f, inputDirection.y).normalized;
 
-            // Eğer oyuncu duruyorsa, baktığı yöne doğru takla at.
             if (rollDir == Vector3.zero)
             {
                 rollDir = new Vector3(transform.localScale.x, 0, 0);
             }
 
-            float rollDuration = 0.3f; // Takla süresi (sabit kalabilir)
+            float rollDuration = 0.3f; 
             
-            // --- DEĞİŞİKLİK: 'statsData.rollForce' yerine 'playerStats.CurrentRollForce' kullan ---
             rb.DOMove(rb.position + rollDir * playerStats.CurrentRollForce, rollDuration).SetEase(Ease.OutQuad);
 
             yield return new WaitForSeconds(rollDuration);

@@ -1,11 +1,12 @@
 /*
  * PLAYER STATS (YÖNETİCİ COMPONENT)
- * * DEĞİŞİKLİKLER (v6 - Burst Fire):
- * - 'CurrentProjectilesPerShot' (int) anlık özelliği eklendi.
- * - 'CurrentBurstFireDelay' (float) anlık özelliği eklendi.
- * - Bu iki stat için modifier (değiştirici) listeleri eklendi.
- * - 'RecalculateAllStats' metodu, bu iki yeni stat'ı hesaplayacak şekilde güncellendi.
- * - Yeni stat'lar için 'Add/Remove' yardımcı metotları eklendi.
+ * * DEĞİŞİKLİKLER (v7 - Opsiyonel GFX):
+ * - 'InitializeVisuals()' metodu güncellendi.
+ * - 'characterGfxRenderer' referansı atanmamışsa (null ise) artık
+ * 'Debug.LogError' VERMEZ.
+ * - Eğer bu referans 'null' ise, fonksiyon sessizce 'return' olur.
+ * - Bu sayede bu component'i Kule (Tower) gibi GFX'i olmayan objelerde
+ * hata almadan kullanabiliriz.
  */
 
 using UnityEngine;
@@ -18,9 +19,13 @@ public class PlayerStats : MonoBehaviour
     [Tooltip("Tüm temel stat'ların çekildiği ScriptableObject")]
     [SerializeField] private PlayerStatsData baseStatsData;
 
-    [Header("Component References")]
-    [Tooltip("Karakterin görünümünün (Sprite) atanacağı SpriteRenderer. ")]
+    // --- DEĞİŞİKLİK: Bu referans artık OPSİYONEL ---
+    [Header("Component References (Optional)")]
+    [Tooltip("(Opsiyonel) Karakterin görünümünün (Sprite) atanacağı SpriteRenderer. " +
+             "Eğer boş bırakılırsa, sprite atama işlemi yapılmaz.")]
     [SerializeField] private SpriteRenderer characterGfxRenderer;
+    // --- DEĞİŞİKLİK SONU ---
+
 
     // --- ANLIK (RUNTIME) HESAPLANMIŞ STAT'LAR ---
     public int CurrentMaxHealth { get; private set; }
@@ -33,14 +38,8 @@ public class PlayerStats : MonoBehaviour
     public float CurrentAttackRange { get; private set; }
     public int CurrentProjectileDamage { get; private set; }
     public bool CurrentCanFireWhileMoving { get; private set; }
-    
-    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
-    [Tooltip("Anlık olarak bir atışta kaç mermi atılacağı.")]
     public int CurrentProjectilesPerShot { get; private set; }
-    [Tooltip("Anlık olarak burst mermileri arasındaki gecikme.")]
     public float CurrentBurstFireDelay { get; private set; }
-    // --- YENİ EKLENEN KISIM SONU ---
-
 
     // --- MODIFIER (DEĞİŞTİRİCİ) LİSTELERİ ---
     private readonly List<StatModifier> maxHealthModifiers = new List<StatModifier>();
@@ -52,11 +51,8 @@ public class PlayerStats : MonoBehaviour
     private readonly List<StatModifier> attackSpeedModifiers = new List<StatModifier>();
     private readonly List<StatModifier> attackRangeModifiers = new List<StatModifier>();
     private readonly List<StatModifier> projectileDamageModifiers = new List<StatModifier>();
-    
-    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
     private readonly List<StatModifier> projectilesPerShotModifiers = new List<StatModifier>();
     private readonly List<StatModifier> burstFireDelayModifiers = new List<StatModifier>();
-    // --- YENİ EKLENEN KISIM SONU ---
 
     // Stat'lar değiştiğinde tetiklenecek olay (event).
     public event System.Action OnStatsChanged;
@@ -69,22 +65,45 @@ public class PlayerStats : MonoBehaviour
             return;
         }
         
+        // Görünümü ayarla (eğer atanmışsa)
         InitializeVisuals();
+        
+        // Tüm stat'ları hesapla
         RecalculateAllStats();
     }
     
+    // --- DEĞİŞİKLİK BAŞLANGICI: 'InitializeVisuals' Artık Opsiyonel ---
+    /// <summary>
+    /// (Opsiyonel) Karakterin görselini baseStatsData'dan (SO) okuyarak ayarlar.
+    /// Eğer 'characterGfxRenderer' atanmamışsa hiçbir şey yapmaz.
+    /// </summary>
     private void InitializeVisuals()
     {
+        // 1. Opsiyonel kontrol:
+        // Eğer Inspector'da bu alana bir SpriteRenderer atanmamışsa,
+        // bu component'in (örn: bir Kule) görselini stat'lardan yönetmek
+        // istemiyoruz demektir. Hata vermeden sessizce çık.
         if (characterGfxRenderer == null)
         {
-            Debug.LogError("PlayerStats üzerinde 'Character Gfx Renderer' referansı atanmamış!");
-            return;
+            return; // Bu artık bir hata değil, beklenen bir durum.
         }
+
+        // 2. Renderer Atanmışsa (örn: Player):
+        // ScriptableObject'ta (baseStatsData) bir sprite tanımlanmış mı kontrol et.
         if (baseStatsData.characterSprite != null)
         {
+            // Sprite'ı ata.
             characterGfxRenderer.sprite = baseStatsData.characterSprite;
         }
+        else
+        {
+            // Renderer atanmış AMA data asset'inde sprite yok.
+            // Bu bir uyarı olmalı (hata değil).
+            Debug.LogWarning($"PlayerStatsData ({baseStatsData.name}) üzerinde 'Character Sprite' atanmamış, " +
+                             $"ancak '{gameObject.name}' objesi bir GFX Renderer bekliyor. Mevcut sprite korunacak.");
+        }
     }
+    // --- DEĞİŞİKLİK SONU ---
 
     /// <summary>
     /// Belirli bir temel değere (float), listedeki tüm modifiyerleri uygular ve son değeri döner.
@@ -120,15 +139,12 @@ public class PlayerStats : MonoBehaviour
         CurrentProjectileRadius = CalculateStat(baseStatsData.projectileRadius, projectileRadiusModifiers);
         CurrentAttackSpeed = CalculateStat(baseStatsData.attackSpeed, attackSpeedModifiers);
         CurrentAttackRange = CalculateStat(baseStatsData.attackRange, attackRangeModifiers);
+        CurrentBurstFireDelay = CalculateStat(baseStatsData.burstFireDelay, burstFireDelayModifiers);
 
         // Int Değerler
         CurrentMaxHealth = (int)CalculateStat(baseStatsData.maxHealth, maxHealthModifiers);
         CurrentProjectileDamage = (int)CalculateStat(baseStatsData.projectileDamage, projectileDamageModifiers);
-        
-        // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
         CurrentProjectilesPerShot = (int)CalculateStat(baseStatsData.projectilesPerShot, projectilesPerShotModifiers);
-        CurrentBurstFireDelay = CalculateStat(baseStatsData.burstFireDelay, burstFireDelayModifiers);
-        // --- YENİ EKLENEN KISIM SONU ---
 
         // Bool (Seçenek) Değerler
         CurrentCanFireWhileMoving = baseStatsData.canFireWhileMoving;
@@ -137,9 +153,8 @@ public class PlayerStats : MonoBehaviour
         if (CurrentAttackSpeed <= 0) CurrentAttackSpeed = 0.1f;
         if (CurrentAttackRange < 0) CurrentAttackRange = 0;
         if (CurrentProjectileDamage < 0) CurrentProjectileDamage = 0;
-        if (CurrentProjectilesPerShot < 1) CurrentProjectilesPerShot = 1; // En az 1 mermi atılmalı
-        if (CurrentBurstFireDelay < 0.01f) CurrentBurstFireDelay = 0.01f; // Gecikme çok düşük olmamalı
-        // --- YENİ KONTROLLER EKLENDİ ---
+        if (CurrentProjectilesPerShot < 1) CurrentProjectilesPerShot = 1;
+        if (CurrentBurstFireDelay < 0.01f) CurrentBurstFireDelay = 0.01f;
         
         // Değişiklikleri diğer script'lere haber ver
         OnStatsChanged?.Invoke();
@@ -181,11 +196,9 @@ public class PlayerStats : MonoBehaviour
     public void AddProjectileDamageModifier(StatModifier mod) => AddModifier(mod, projectileDamageModifiers);
     public bool RemoveProjectileDamageModifiersFromSource(object source) => RemoveModifiersFromSource(source, projectileDamageModifiers);
     
-    // --- YENİ EKLENEN KISIM BAŞLANGICI (Burst Fire) ---
     public void AddProjectilesPerShotModifier(StatModifier mod) => AddModifier(mod, projectilesPerShotModifiers);
     public bool RemoveProjectilesPerShotModifiersFromSource(object source) => RemoveModifiersFromSource(source, projectilesPerShotModifiers);
     
     public void AddBurstFireDelayModifier(StatModifier mod) => AddModifier(mod, burstFireDelayModifiers);
     public bool RemoveBurstFireDelayModifiersFromSource(object source) => RemoveModifiersFromSource(source, burstFireDelayModifiers);
-    // --- YENİ EKLENEN KISIM SONU ---
 }
