@@ -770,6 +770,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6548415084739001889, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+      propertyPath: projectilePrefab
+      value: 
+      objectReference: {fileID: 2829856321817114063, guid: 51777ba2ecd6fed45a171d318a10cc3e, type: 3}
     - target: {fileID: 7107154609808163723, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: m_Name
       value: Player
@@ -1631,8 +1635,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: beb5f0bbc354f5d449eea8768c752e72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  CurrentMode: 0
   target: {fileID: 441783843}
   offset: {x: 0, y: 6.72, z: -8.68}
+  followSpeed: 8
 --- !u!4 &331731258 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3758831290525234046, guid: c8ebec87794f9e541b3416e11049afa7, type: 3}
@@ -8265,7 +8271,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   pools:
   - tag: projectile
-    prefab: {fileID: 2829856321817114063, guid: 51777ba2ecd6fed45a171d318a10cc3e, type: 3}
+    prefab: {fileID: 2829856321817114063, guid: 605d50a8f379448a5a4ca289f6e64719, type: 3}
     size: 50
     isDynamicallyManaged: 0
   - tag: explosion
