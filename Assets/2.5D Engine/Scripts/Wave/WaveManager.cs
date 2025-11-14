@@ -1,5 +1,5 @@
 /*
- * WAVE MANAGER (YÖNETİCİ MODELİ - v4.1)
+ * WAVE MANAGER (YÖNETİCİ MODELİ - v4.4)
  * * DEĞİŞİKLİKLER (Hata Düzeltmesi CS1671):
  * - '[DefaultExecutionOrder(-10)]' özniteliği, 'namespace' bloğunun
  * dışından, 'public class WaveManager' bildiriminin hemen üzerine,
@@ -34,8 +34,7 @@ namespace IndianOceanAssets.Engine2_5D
         [SerializeField] private RoundManager roundManager;
         
         [Header("Wave Data")]
-        [Tooltip("Bu seviyede oynanacak dalga profili. Turun süresi, gecikmesi ve " +
-                 "tüm düşman spawn olayları bu asset'ten okunur.")]
+        [Tooltip("Bu seviyede oynanacak dalga profili.")]
         [SerializeField] private WaveProfile currentRoundProfile; 
         
         
@@ -90,36 +89,39 @@ namespace IndianOceanAssets.Engine2_5D
             CalculatePoolRequirements();
 
             // 5. Dinamik Düşman Havuzlarını Oluştur
-            if (dynamicEnemyPools.Count > 0)
-            {
-                Debug.Log($"--- WaveManager: Düşman Havuzları Oluşturuluyor... ({dynamicEnemyPools.Count} tip) ---");
-                foreach (var entry in dynamicEnemyPools)
-                {
-                    ObjectPooler.Instance.CreatePool(entry.Key.name, entry.Key, entry.Value);
-                }
-            }
-            else
-            {
-                Debug.LogWarning("WaveManager: Hesaplama sonucunda spawn edilecek DÜŞMAN bulunamadı.");
-            }
+            CreateDynamicPools(dynamicEnemyPools, "Düşman");
             
             // 6. Dinamik Efekt Havuzlarını Oluştur
-            if (dynamicEffectPools.Count > 0)
-            {
-                Debug.Log($"--- WaveManager: Efekt Havuzları Oluşturuluyor... ({dynamicEffectPools.Count} tip) ---");
-                foreach (var entry in dynamicEffectPools)
-                {
-                    ObjectPooler.Instance.CreatePool(entry.Key.name, entry.Key, entry.Value);
-                }
-            }
-            else
-            {
-                Debug.LogWarning("WaveManager: Hesaplama sonucunda spawn edilecek ÖLÜM EFEKTİ bulunamadı.");
-            }
+            CreateDynamicPools(dynamicEffectPools, "Efekt");
             
             // 7. Dalgaları Başlat
             StartNextWave();
         }
+
+        /// <summary>
+        /// ObjectPooler'a havuz oluşturma komutlarını gönderen yardımcı metot.
+        /// </summary>
+        private void CreateDynamicPools(Dictionary<GameObject, int> poolDict, string poolType)
+        {
+            if (poolDict != null && poolDict.Count > 0)
+            {
+                Debug.Log($"--- WaveManager: {poolType} Havuzları Oluşturuluyor... ({poolDict.Count} tip) ---");
+                foreach (var entry in poolDict)
+                {
+                    if (entry.Key == null)
+                    {
+                        Debug.LogWarning($"WaveManager: {poolType} havuzunda 'null' prefab bulundu. Atlanıyor.");
+                        continue;
+                    }
+                    ObjectPooler.Instance.CreatePool(entry.Key.name, entry.Key, entry.Value);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"WaveManager: Hesaplama sonucunda spawn edilecek {poolType} bulunamadı.");
+            }
+        }
+        
         
         /// <summary>
         /// 'currentRoundProfile'ı analiz eder ve havuz ihtiyaçlarını hesaplar.
@@ -137,6 +139,7 @@ namespace IndianOceanAssets.Engine2_5D
                 return;
             }
 
+            // Turun toplam süresini al (bu, varsayılan bitiş zamanıdır)
             float roundDuration = roundManager.RoundDuration;
             
             // Dalgadaki bütün olayları tara
@@ -150,15 +153,28 @@ namespace IndianOceanAssets.Engine2_5D
                 }
 
                 int countForThisEvent = 0;
+                
                 if (spawnEvent.isPeriodic) // Periyodik
                 {
-                    if (spawnEvent.repeatInterval <= 0.1f) 
+                    if (spawnEvent.repeatInterval < 0.1f) 
                     {
+                        Debug.LogWarning($"WaveProfile ({currentRoundProfile.name}) içindeki bir periyodik olayın 'repeatInterval' değeri çok düşük. Tek seferlik olarak hesaplanacak.");
                         countForThisEvent = spawnEvent.count; 
                     }
                     else
                     {
-                        float activeDuration = roundDuration - spawnEvent.triggerTime;
+                        // 1. Geçerli bitiş zamanını belirle:
+                        float effectiveEndTime = roundDuration; 
+                        
+                        if (spawnEvent.hasFiniteDuration && spawnEvent.endTime < effectiveEndTime)
+                        {
+                            effectiveEndTime = spawnEvent.endTime;
+                        }
+
+                        // 2. Aktif süreyi hesapla
+                        float activeDuration = effectiveEndTime - spawnEvent.triggerTime;
+                        
+                        // 3. Tekrar sayısını hesapla
                         if (activeDuration > 0)
                         {
                             int repetitions = Mathf.FloorToInt(activeDuration / spawnEvent.repeatInterval) + 1;
@@ -168,7 +184,7 @@ namespace IndianOceanAssets.Engine2_5D
                 }
                 else // Tek seferlik
                 {
-                    if(spawnEvent.triggerTime <= roundDuration)
+                    if(spawnEvent.triggerTime <= roundDuration) 
                     {
                         countForThisEvent = spawnEvent.count;
                     }
@@ -214,26 +230,17 @@ namespace IndianOceanAssets.Engine2_5D
         }
 
         /// <summary>
-        /// Sahnede o anda aktif olan TÜM "Enemy" tag'li objeleri bulur
-        /// ve onları 'Die()' metodunu çağırarak öldürür.
+        /// Sahnede o anda aktif olan TÜM "Enemy" tag'li objeleri bulur ve öldürür.
         /// </summary>
         public void KillAllActiveEnemies()
         {
             GameObject[] activeEnemies = GameObject.FindGameObjectsWithTag("Enemy");
-            
             Debug.Log($"WaveManager: Tur bitti. Sahnede kalan {activeEnemies.Length} adet düşman öldürülüyor...");
-
             foreach (GameObject enemy in activeEnemies)
             {
                 HealthSystem hs = enemy.GetComponent<HealthSystem>();
-                if (hs != null)
-                {
-                    hs.Die();
-                }
-                else
-                {
-                    Destroy(enemy);
-                }
+                if (hs != null) hs.Die();
+                else Destroy(enemy);
             }
         }
 
@@ -245,22 +252,23 @@ namespace IndianOceanAssets.Engine2_5D
             if (ObjectPooler.Instance == null) return;
             Debug.Log("--- WaveManager: Dinamik Havuzlar Temizleniyor... ---");
 
-            if (dynamicEnemyPools != null)
-            {
-                foreach (var entry in dynamicEnemyPools)
-                {
-                    ObjectPooler.Instance.DestroyPool(entry.Key.name);
-                }
-                dynamicEnemyPools.Clear(); 
-            }
+            CleanupPoolDictionary(dynamicEnemyPools);
+            CleanupPoolDictionary(dynamicEffectPools);
+        }
 
-            if (dynamicEffectPools != null)
+        /// <summary>
+        /// 'CleanupDynamicPools' için yardımcı metot.
+        /// </summary>
+        private void CleanupPoolDictionary(Dictionary<GameObject, int> poolDict)
+        {
+            if (poolDict != null)
             {
-                foreach (var entry in dynamicEffectPools)
+                foreach (var entry in poolDict)
                 {
+                    if (entry.Key == null) continue; // Güvenlik
                     ObjectPooler.Instance.DestroyPool(entry.Key.name);
                 }
-                dynamicEffectPools.Clear(); 
+                poolDict.Clear(); 
             }
         }
 
@@ -274,19 +282,53 @@ namespace IndianOceanAssets.Engine2_5D
             
             if (currentRoundProfile == null) return; 
 
+            float currentTime = roundManager.TimeElapsed;
+            float roundDuration = roundManager.RoundDuration; // Turun sonunu bilmemiz gerek
+
             for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++)
             {
-                if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
+                // Eğer olay bittiyse (Infinity), atla
+                if (nextEventTriggerTimes[i] == Mathf.Infinity)
+                {
+                    continue;
+                }
+
+                // Tetiklenme zamanı geldi mi?
+                if (currentTime >= nextEventTriggerTimes[i])
                 {
                     SpawnEvent currentEvent = currentRoundProfile.spawnEvents[i];
-                    StartCoroutine(SpawnBurst(currentEvent));
+                    StartCoroutine(SpawnBurst(currentEvent)); // Düşmanları spawn et
 
+                    // --- Sonraki Spawn Zamanını Planlama ---
                     if (currentEvent.isPeriodic)
                     {
-                        nextEventTriggerTimes[i] += currentEvent.repeatInterval;
+                        // 1. Bir sonraki spawn zamanını hesapla
+                        float nextSpawnTime = nextEventTriggerTimes[i] + currentEvent.repeatInterval;
+                        
+                        // 2. Geçerli bitiş zamanını belirle
+                        // Varsayılan bitiş, tur süresidir (roundDuration).
+                        float effectiveEndTime = roundDuration; 
+                        
+                        if (currentEvent.hasFiniteDuration && currentEvent.endTime < effectiveEndTime)
+                        {
+                            effectiveEndTime = currentEvent.endTime;
+                        }
+
+                        // 3. Kontrol et: Bir sonraki spawn, bitiş zamanından önce mi?
+                        if (nextSpawnTime <= effectiveEndTime)
+                        {
+                            // Evet, bir sonraki spawn'ı planla
+                            nextEventTriggerTimes[i] = nextSpawnTime;
+                        }
+                        else
+                        {
+                            // Hayır, bu olayın son spawn'ıydı. Olayı bitir.
+                            nextEventTriggerTimes[i] = Mathf.Infinity;
+                        }
                     }
                     else
                     {
+                        // Tek seferlik olaydı, olayı bitir.
                         nextEventTriggerTimes[i] = Mathf.Infinity;
                     }
                 }
@@ -307,7 +349,6 @@ namespace IndianOceanAssets.Engine2_5D
                 {
                     nextEventTriggerTimes.Add(spawnEvent.triggerTime);
                 }
-
                 waveActive = true;
             }
             else
@@ -323,14 +364,11 @@ namespace IndianOceanAssets.Engine2_5D
         private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
         {
             GameObject prefabToSpawn = spawnEvent.enemyPrefab;
-            if (prefabToSpawn == null)
-            {
-                Debug.LogError("SpawnEvent'te 'enemyPrefab' (null) olduğu için spawn işlemi yapılamadı.");
-                yield break;
-            }
+            if (prefabToSpawn == null) yield break;
+            
             if (!spawnPoints.ContainsKey(spawnEvent.spawnPointID))
             {
-                Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı! Düşman spawn edilemiyor.");
+                Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı!");
                 yield break; 
             }
 
@@ -339,6 +377,8 @@ namespace IndianOceanAssets.Engine2_5D
 
             for (int i = 0; i < spawnEvent.count; i++)
             {
+                if (!waveActive) yield break;
+
                 GameObject spawnedEnemy = ObjectPooler.Instance.SpawnFromPool(poolTag, spawnPoint.transform.position, Quaternion.identity);
                 
                 if (spawnedEnemy == null)
@@ -353,7 +393,10 @@ namespace IndianOceanAssets.Engine2_5D
                     pooledObj.PoolTag = poolTag;
                 }
                 
-                yield return new WaitForSeconds(spawnEvent.spawnInterval);
+                if (spawnEvent.spawnInterval > 0)
+                {
+                    yield return new WaitForSeconds(spawnEvent.spawnInterval);
+                }
             }
         }
     }

@@ -20,19 +20,25 @@ MonoBehaviour:
     triggerTime: 0
     isPeriodic: 0
     repeatInterval: 0
-    count: 10
+    hasFiniteDuration: 0
+    endTime: 0
+    count: 5
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 1
     triggerTime: 5
     isPeriodic: 1
     repeatInterval: 1
+    hasFiniteDuration: 1
+    endTime: 10
     count: 1
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 2
     triggerTime: 3
-    isPeriodic: 0
-    repeatInterval: 0
-    count: 2
+    isPeriodic: 1
+    repeatInterval: 5
+    hasFiniteDuration: 0
+    endTime: 0
+    count: 1
     spawnInterval: 1
