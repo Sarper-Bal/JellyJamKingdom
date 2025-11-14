@@ -5219,8 +5219,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   roundManager: {fileID: 1979538491}
-  waves:
-  - {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
+  currentRoundProfile: {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
 --- !u!4 &990297988
 Transform:
   m_ObjectHideFlags: 0
@@ -9703,8 +9702,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ad32b52397da46468fd1323848cca16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  roundDuration: 30
-  victoryDelay: 10
   timerText: {fileID: 407776899}
   victoryPanel: {fileID: 0}
 --- !u!4 &1979538492

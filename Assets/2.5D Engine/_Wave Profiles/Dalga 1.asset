@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 772cc516b38fa4ec48fa83231ba24b3e, type: 3}
   m_Name: Dalga 1
   m_EditorClassIdentifier: 
+  roundDuration: 30
+  victoryDelay: 5
   spawnEvents:
   - enemyPrefab: {fileID: 2150025513644625521, guid: 3ab93720f74ea4e81aba1a449535352d, type: 3}
     spawnPointID: 0
