@@ -1,12 +1,13 @@
 /*
- * ROUND MANAGER (UYGULAYICI - v3)
- * * DEĞİŞİKLİKLER (Veri Odaklı):
- * - Inspector'dan ayarlanan 'roundDuration' ve 'victoryDelay' değişkenleri kaldırıldı.
- * - Bunların yerine 'currentRoundDuration' ve 'currentVictoryDelay' adında
- * private (özel) değişkenler getirildi.
- * - 'WaveManager'dan ayarları alabilmek için 'InitializeRound' adında
- * public bir metot eklendi.
- * - 'RoundDuration' property'si (özelliği) artık 'currentRoundDuration'ı döndürüyor.
+ * ROUND MANAGER (TETİKLEYİCİ - v3.1)
+ * * DEĞİŞİKLİKLER (Güvenli Temizlik):
+ * - 'ShowVictoryScreen()' Coroutine'i güncellendi.
+ * - 'victoryDelay' bittikten sonraki sıralama değiştirildi:
+ * 1. WaveManager.KillAllActiveEnemies() (Sahnede kalanları öldür)
+ * 2. WaveManager.CleanupDynamicPools() (Havuzları temizle)
+ * 3. victoryPanel.SetActive(true) (Ekranı göster)
+ * - Bu, zafer ekranı göründüğünde sahnede düşman kalmamasını ve
+ * efekt havuzu hatalarını engeller.
  */
 
 using UnityEngine;
@@ -19,15 +20,9 @@ namespace IndianOceanAssets.Engine2_5D
 {
     public class RoundManager : MonoBehaviour
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
-        // Inspector'dan ayarlanan değişkenler kaldırıldı.
-        // [SerializeField] private float roundDuration = 60f;
-        // [SerializeField] private float victoryDelay = 3f;
-
-        // Bu değerler artık 'InitializeRound' metodu ile 'WaveManager' tarafından atanacak.
+        // Inspector'dan atanan değişkenler kaldırıldı.
         private float currentRoundDuration;
         private float currentVictoryDelay;
-        // --- DEĞİŞİKLİK SONU ---
         
         [Header("UI")]
         [Tooltip("Kalan süreyi gösterecek olan TextMeshPro objesi.")]
@@ -37,32 +32,24 @@ namespace IndianOceanAssets.Engine2_5D
         [SerializeField] private GameObject victoryPanel; 
 
         public float TimeElapsed { get; private set; }
-        
-        // --- DEĞİŞİKLİK: Artık 'currentRoundDuration' döndürüyor ---
         public float RoundDuration => currentRoundDuration; 
-
         public bool IsRoundActive { get; private set; }
 
         
-        // --- YENİ FONKSİYON BAŞLANGICI ---
         /// <summary>
         /// RoundManager'ı, WaveProfile'dan gelen ayarlarla başlatır.
-        /// Bu metot, 'WaveManager.Start()' tarafından 'Start()' metodundan önce çağrılır.
         /// </summary>
-        /// <param name="duration">Turun toplam süresi</param>
-        /// <param name="delay">Kazanma gecikme süresi</param>
         public void InitializeRound(float duration, float delay)
         {
             this.currentRoundDuration = duration;
             this.currentVictoryDelay = delay;
             Debug.Log($"RoundManager: Tur Süresi {duration}s, Zafer Gecikmesi {delay}s olarak ayarlandı.");
         }
-        // --- YENİ FONKSİYON SONU ---
         
 
         private void Start()
         {
-            // Güvenlik kontrolü: Eğer InitializeRound çağrılmadıysa (örn: WaveManager yoksa)
+            // Güvenlik kontrolü
             if (currentRoundDuration == 0)
             {
                 Debug.LogWarning("RoundManager.InitializeRound() çağrılmadı. Varsayılan süre (60s) kullanılıyor.");
@@ -84,8 +71,6 @@ namespace IndianOceanAssets.Engine2_5D
             if (IsRoundActive)
             {
                 TimeElapsed += Time.deltaTime;
-                
-                // --- DEĞİŞİKLİK: 'roundDuration' yerine 'currentRoundDuration' kullanılıyor ---
                 float timeLeft = currentRoundDuration - TimeElapsed;
 
                 if (timeLeft <= 0)
@@ -100,7 +85,7 @@ namespace IndianOceanAssets.Engine2_5D
         
         /// <summary>
         /// Turu sonlandırır (Kazanma durumu).
-        /// Düşman spawn'ını durdurur ve gecikmeli temizliği başlatır.
+        /// Düşman spawn'ını HEMEN durdurur ve GECİKMELİ temizlik sürecini başlatır.
         /// </summary>
         private void EndRound()
         {
@@ -124,16 +109,22 @@ namespace IndianOceanAssets.Engine2_5D
         /// </summary>
         private IEnumerator ShowVictoryScreen()
         {
-            // --- DEĞİŞİKLİK: 'victoryDelay' yerine 'currentVictoryDelay' kullanılıyor ---
+            // 1. Lütuf zamanı (grace period) kadar bekle.
             yield return new WaitForSeconds(currentVictoryDelay);
 
-            // 2. Lütuf zamanı bitti. Havuzları TEMİZLE.
+            // --- DEĞİŞİKLİK BAŞLANGICI: Güvenli Temizlik Sıralaması ---
             if (WaveManager.Instance != null)
             {
+                // 2. Sahnede kalan tüm aktif düşmanları ÖLDÜR
+                //    (Onlar da havuzlarına geri dönecek)
+                WaveManager.Instance.KillAllActiveEnemies();
+                
+                // 3. Artık içi dolu olan dinamik havuzları TEMİZLE
                 WaveManager.Instance.CleanupDynamicPools();
             }
-            
-            // 3. Zafer ekranını göster.
+            // --- DEĞİŞİKLİK SONU ---
+
+            // 4. Zafer ekranını göster.
             if (victoryPanel != null)
             {
                 victoryPanel.SetActive(true);

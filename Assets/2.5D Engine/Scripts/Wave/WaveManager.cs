@@ -214,6 +214,30 @@ namespace IndianOceanAssets.Engine2_5D
         }
 
         /// <summary>
+        /// Sahnede o anda aktif olan TÜM "Enemy" tag'li objeleri bulur
+        /// ve onları 'Die()' metodunu çağırarak öldürür.
+        /// </summary>
+        public void KillAllActiveEnemies()
+        {
+            GameObject[] activeEnemies = GameObject.FindGameObjectsWithTag("Enemy");
+            
+            Debug.Log($"WaveManager: Tur bitti. Sahnede kalan {activeEnemies.Length} adet düşman öldürülüyor...");
+
+            foreach (GameObject enemy in activeEnemies)
+            {
+                HealthSystem hs = enemy.GetComponent<HealthSystem>();
+                if (hs != null)
+                {
+                    hs.Die();
+                }
+                else
+                {
+                    Destroy(enemy);
+                }
+            }
+        }
+
+        /// <summary>
         /// 'Start'ta oluşturulan tüm dinamik havuzları (düşman ve efekt) TEMİZLER.
         /// </summary>
         public void CleanupDynamicPools()
@@ -278,7 +302,6 @@ namespace IndianOceanAssets.Engine2_5D
             {
                 Debug.Log($"WaveManager: '{currentRoundProfile.name}' profili başlatılıyor!");
 
-                // Zaman takip listesini sıfırla ve ilk tetiklenme zamanlarını ayarla
                 nextEventTriggerTimes = new List<float>();
                 foreach (var spawnEvent in currentRoundProfile.spawnEvents)
                 {
@@ -312,7 +335,7 @@ namespace IndianOceanAssets.Engine2_5D
             }
 
             EnemySpawnPoint spawnPoint = spawnPoints[spawnEvent.spawnPointID];
-            string poolTag = prefabToSpawn.name; // Prefab'ın adı = Havuzun tag'i
+            string poolTag = prefabToSpawn.name; 
 
             for (int i = 0; i < spawnEvent.count; i++)
             {

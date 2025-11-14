@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: Dalga 1
   m_EditorClassIdentifier: 
   roundDuration: 30
-  victoryDelay: 5
+  victoryDelay: 1
   spawnEvents:
   - enemyPrefab: {fileID: 2150025513644625521, guid: 3ab93720f74ea4e81aba1a449535352d, type: 3}
     spawnPointID: 0
     triggerTime: 0
     isPeriodic: 0
     repeatInterval: 0
-    count: 1
+    count: 10
     spawnInterval: 1
   - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
     spawnPointID: 1
