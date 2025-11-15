@@ -1,15 +1,15 @@
 /*
- * CAMERA FOLLOW (YÖNETİCİ MODELİ - v1.6 Teyit Edilmiş)
- * * PERFORMANS ANALİZİ:
- * - Update() içindeki 'CurrentMode != previousMode' kontrolü,
- * bir 'int' karşılaştırmasıdır ve maliyeti ihmal edilebilir.
- * - 'switch' bloğu yüksek performanslıdır.
- * - 'HandleFreeMove()' ve 'HandleFollowTarget()' metotları, temel matematik
- * işlemleri ve 'struct' (Vector, Quaternion) atamaları kullanır.
- * - Bu script, Update() döngüsünde HİÇBİRYERDE 'heap' üzerinde yeni nesne
- * (class, string, vb.) oluşturmaz.
- * - SONUÇ: Bu yapı SIFIR (ZERO) çöp (Garbage) üretir ve mobil
- * cihazlar için son derece optimize bir çözümdür.
+ * CAMERA FOLLOW (YÖNETİCİ MODELİ)
+ * * DEĞİŞİKLİKLER (v1.7 - Serbest Dolaşım Sınırları):
+ * - 'FreeMove Settings' altına 'freeMoveMinBounds' ve 'freeMoveMaxBounds'
+ * (Vector2) eklendi. (X ve Z eksenleri için).
+ * - 'ApplyModeChange()' metodu, 'FreeMove' moduna geçerken ayarlanan
+ * 'freeMoveStartPosition' değerini bu sınırlara 'Clamp' (sınırlama)
+ * yapacak şekilde güncellendi.
+ * - 'HandleFreeMove()' metodu, joystick ile hareket ettirilen pozisyonu
+ * 'transform.position'a atamadan önce 'Mathf.Clamp()' kullanarak
+ * bu sınırlara kısıtlayacak şekilde güncellendi.
+ * - Bu yapı, Update() içinde GC (çöp) üretmez ve son derece optimizedir.
  */
 
 using UnityEngine;
@@ -56,6 +56,16 @@ namespace IndianOceanAssets.Engine2_5D
         [Tooltip("'FreeMove' moduna geçerken kameranın anında alacağı DÜNYA ROTASYONU (Euler Açıları).")]
         [SerializeField] private Vector3 freeMoveStartRotation = new Vector3(45, 0, 0);
         
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Sınır Değişkenleri) ---
+        [Space]
+        [Header("Free Move Boundaries (XZ Plane)")]
+        [Tooltip("Serbest dolaşım alanının minimum (Sol-Alt) XZ koordinatları. (Vector2'nin Y'si, Z ekseni içindir)")]
+        [SerializeField] private Vector2 freeMoveMinBounds = new Vector2(-50, -50);
+
+        [Tooltip("Serbest dolaşım alanının maksimum (Sağ-Üst) XZ koordinatları. (Vector2'nin Y'si, Z ekseni içindir)")]
+        [SerializeField] private Vector2 freeMoveMaxBounds = new Vector2(50, 50);
+        // --- DEĞİŞİKLİK SONU ---
+        
         // 'FollowTarget' modu için varsayılan rotasyon
         private Quaternion followTargetRotation;
         // Bir önceki frame'deki modu izlemek için
@@ -75,7 +85,7 @@ namespace IndianOceanAssets.Engine2_5D
             // Kameranın varsayılan rotasyonunu kaydet
             followTargetRotation = transform.rotation;
             
-            // Input Handler için güvenlik kontrolü (eğer Inspector'dan atanmadıysa)
+            // Input Handler için güvenlik kontrolü
             if (playerInputHandler == null)
             {
                 playerInputHandler = FindObjectOfType<PlayerInputHandler>();
@@ -90,20 +100,20 @@ namespace IndianOceanAssets.Engine2_5D
             previousMode = CurrentMode;
             // Kameranın oyuna başlarken doğru pozisyon/rotasyona
             // anında (snap) geçmesini garantilemek için geçiş fonksiyonunu çağır.
-            ApplyModeChange(CurrentMode, (CameraMode)(-1)); // 'oldMode'u geçersiz yaparak ilk ayarı zorla
+            ApplyModeChange(CurrentMode, (CameraMode)(-1));
         }
         
         private void Update()
         {
-            // 1. Mod Değişikliğini Algıla (Çok düşük maliyetli 'int' karşılaştırması)
+            // 1. Mod Değişikliğini Algıla
             if (CurrentMode != previousMode)
             {
-                // Mod değiştiyse, geçiş mantığını (snap) uygula (Sadece 1 frame çalışır)
+                // Mod değiştiyse, geçiş mantığını (snap) uygula
                 ApplyModeChange(CurrentMode, previousMode);
-                previousMode = CurrentMode; // Modu güncelle
+                previousMode = CurrentMode;
             }
 
-            // 2. Mevcut Modu Uygula (Her Frame - Düşük maliyetli 'switch')
+            // 2. Mevcut Modu Uygula (Her Frame)
             switch (CurrentMode)
             {
                 case CameraMode.FollowTarget:
@@ -113,7 +123,6 @@ namespace IndianOceanAssets.Engine2_5D
                     HandleFreeMove();
                     break;
                 case CameraMode.Independent:
-                    // Hiçbir şey yapma (En optimize durum)
                     break;
             }
         }
@@ -121,16 +130,29 @@ namespace IndianOceanAssets.Engine2_5D
         /// <summary>
         /// Mod değişikliği algılandığında *ANINDA* (snap) yapılması gereken
         /// pozisyon/rotasyon ayarlarını yapar.
-        /// Bu fonksiyon sadece mod değişim anında 1 kez çalışır.
         /// </summary>
         private void ApplyModeChange(CameraMode newMode, CameraMode oldMode)
         {
             // 'FreeMove' moduna GİRİYORSAK:
             if (newMode == CameraMode.FreeMove)
             {
-                // Kamerayı anında (snap) stratejik pozisyona ve rotasyona ayarla.
-                transform.position = freeMoveStartPosition;
+                // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Başlangıç Sınır Kontrolü) ---
+                
+                // Inspector'dan ayarlanan başlangıç pozisyonunu al
+                Vector3 startPos = freeMoveStartPosition;
+                
+                // Başlangıç pozisyonunun sınırlar içinde olduğundan emin ol.
+                // Bu, Inspector'a yanlış değer girilmesini engeller.
+                startPos.x = Mathf.Clamp(startPos.x, freeMoveMinBounds.x, freeMoveMaxBounds.x);
+                // (Vector2'nin 'y' alanı, bizim dünyamızın 'z' eksenidir)
+                startPos.z = Mathf.Clamp(startPos.z, freeMoveMinBounds.y, freeMoveMaxBounds.y);
+                // Not: 'startPos.y' (yükseklik) kasten kelepçelenmez.
+
+                // Kamerayı anında (snap) bu (gerekirse düzeltilmiş)
+                // stratejik pozisyona ve rotasyona ayarla.
+                transform.position = startPos;
                 transform.rotation = Quaternion.Euler(freeMoveStartRotation);
+                // --- DEĞİŞİKLİK SONU ---
             }
             
             // 'FollowTarget' moduna GİRİYORSAK:
@@ -138,31 +160,29 @@ namespace IndianOceanAssets.Engine2_5D
             {
                 // Rotasyonu anında (snap) varsayılana döndür.
                 transform.rotation = followTargetRotation;
-                // Not: Pozisyon, 'HandleFollowTarget' içinde hedefe yumuşakça (Lerp) zaten kayacak.
             }
         }
 
         /// <summary>
-        /// 'FollowTarget' modunun her frame çalışan mantığı. (Düşük maliyet)
+        /// 'FollowTarget' modunun her frame çalışan mantığı.
         /// </summary>
         private void HandleFollowTarget()
         {
             if (target != null)
             {
-                // Pozisyonu yumuşakça (Lerp) takip et (Optimize, GC üretmez)
                 transform.position = Vector3.Lerp(
                     transform.position, 
                     target.position + offset, 
                     Time.deltaTime * followSpeed
                 );
             }
-            
-            // Rotasyonu ANINDA varsayılana ayarla (Optimize, GC üretmez)
             transform.rotation = followTargetRotation;
         }
 
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Hareket Sınır Kontrolü) ---
         /// <summary>
-        /// 'FreeMove' modunun her frame çalışan mantığı. (Düşük maliyet)
+        /// 'FreeMove' modunun her frame çalışan mantığı.
+        /// Kamerayı joystick ile sınırlar (bounds) içinde kaydırır.
         /// </summary>
         private void HandleFreeMove()
         {
@@ -171,20 +191,29 @@ namespace IndianOceanAssets.Engine2_5D
             Vector2 input = playerInputHandler.MoveInput;
             if (input == Vector2.zero) return;
             
-            // Temel matematik işlemleri (Optimize, GC üretmez)
-            Vector3 movement = new Vector3(input.x, 0f, input.y);
-            transform.position += movement * freeMoveSpeed * Time.deltaTime;
+            // 1. Hareket vektörünü hesapla (GC üretmez)
+            Vector3 movement = new Vector3(input.x, 0f, input.y) * (freeMoveSpeed * Time.deltaTime);
+            
+            // 2. Yeni *hedef* pozisyonu hesapla
+            Vector3 newPosition = transform.position + movement;
+
+            // 3. Yeni pozisyonu X ve Z eksenlerinde Sınırla (Clamp)
+            // (Bu, 'Mathf.Clamp' kullandığı için çok performanslıdır ve GC üretmez)
+            newPosition.x = Mathf.Clamp(newPosition.x, freeMoveMinBounds.x, freeMoveMaxBounds.x);
+            // (Vector2'nin 'y' alanı, bizim dünyamızın 'z' eksenidir)
+            newPosition.z = Mathf.Clamp(newPosition.z, freeMoveMinBounds.y, freeMoveMaxBounds.y);
+            // Not: newPosition.y (yükseklik) değişmez, çünkü 'movement.y' zaten sıfırdır.
+            
+            // 4. Sınırlanmış pozisyonu kameraya ata
+            transform.position = newPosition;
         }
+        // --- DEĞİŞİKLİK SONU ---
         
         
         // --- PUBLIC API (Dışarıdan Komutlar) ---
         
-        /// <summary>
-        /// Kameranın modunu değiştirir (Dışarıdan komut için).
-        /// </summary>
         public void SetMode(CameraMode newMode)
         {
-            // Sadece değişkeni ayarla. 'Update' döngüsü değişikliği algılayacaktır.
             CurrentMode = newMode;
         }
         
