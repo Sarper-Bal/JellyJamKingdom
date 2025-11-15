@@ -477,6 +477,37 @@ Transform:
   - {fileID: 2116328957}
   m_Father: {fileID: 505134148}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &69575369
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 69575370}
+  m_Layer: 0
+  m_Name: Nokta_B
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &69575370
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 69575369}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 178346692}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &112813346 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: c1aed6b374a7549ba8cf293dd5fbaac3, type: 3}
@@ -820,6 +851,40 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1978736594686439443, guid: bdef0bd16bba97a4a8261c3965f1e1e6, type: 3}
   m_PrefabInstance: {fileID: 1396241482}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &178346691
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 178346692}
+  m_Layer: 0
+  m_Name: path1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &178346692
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 178346691}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2055392441}
+  - {fileID: 69575370}
+  - {fileID: 1680393829}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &181848847 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: ecfd6a64769da8540b398d3d3487ad2d, type: 3}
@@ -1750,7 +1815,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: beb5f0bbc354f5d449eea8768c752e72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CurrentMode: 2
+  CurrentMode: 0
   target: {fileID: 441783843}
   offset: {x: 0, y: 6.72, z: -8.68}
   followSpeed: 8
@@ -1758,6 +1823,8 @@ MonoBehaviour:
   freeMoveSpeed: 20
   freeMoveStartPosition: {x: 0, y: 15, z: -10}
   freeMoveStartRotation: {x: 30, y: 0, z: 0}
+  freeMoveMinBounds: {x: -50, y: -50}
+  freeMoveMaxBounds: {x: 50, y: 50}
 --- !u!4 &331731258 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3758831290525234046, guid: c8ebec87794f9e541b3416e11049afa7, type: 3}
@@ -8954,6 +9021,37 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: fc0b79ea16b3c9646a5eb6887112743a, type: 3}
+--- !u!1 &1680393828
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1680393829}
+  m_Layer: 0
+  m_Name: Nokta_C
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1680393829
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1680393828}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 40}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 178346692}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1707482757 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3758831290525234046, guid: ea0d2ca6291b611408d41e8eba9eda23, type: 3}
@@ -10866,6 +10964,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: bb332dc2f4decfa478c4d4ff4ea44d38, type: 3}
   m_PrefabInstance: {fileID: 2029616325}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2055392440
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2055392441}
+  m_Layer: 0
+  m_Name: Nokta_A
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2055392441
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2055392440}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 20.78}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 178346692}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2076874912
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11542,6 +11671,7 @@ SceneRoots:
   - {fileID: 505134148}
   - {fileID: 610005744}
   - {fileID: 923834361}
+  - {fileID: 178346692}
   - {fileID: 1147650015}
   - {fileID: 1551019707}
   - {fileID: 974792957}
