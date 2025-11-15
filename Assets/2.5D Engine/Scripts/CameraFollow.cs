@@ -1,54 +1,72 @@
 /*
  * CAMERA FOLLOW (YÖNETİCİ MODELİ)
- * * DEĞİŞİKLİKLER (v1.2 - Başlangıç Modu Düzeltmesi):
- * - 'Awake()' metodunun sonundaki 'CurrentMode = CameraMode.FollowTarget;' satırı
- * YORUM SATIRI HALİNE GETİRİLDİ (veya silebilirsiniz).
- * - Bu sayede, oyun başlamadan önce Inspector'dan 'Independent' seçilirse,
- * oyun başladığında bu ayar korunur ve 'Awake' tarafından ezilmez.
+ * * DEĞİŞİKLİKLER (v1.4 - Joystick Kontrollü Serbest Dolaşım):
+ * - 'CameraMode' enum'una 'FreeMove' modu eklendi.
+ * - 'playerInputHandler' (PlayerInputHandler) referansı eklendi.
+ * (Bu, "mevcut oyuncu joystick'ini" okumamızı sağlar)
+ * - 'freeMoveSpeed' (float) değişkeni eklendi.
+ * - 'Awake()' metoduna 'playerInputHandler' için bir 'FindObjectOfType' güvenlik
+ * kontrolü eklendi.
+ * - 'Update()' metodu, 3 modu da yönetebilmek için 'switch' yapısı kullanacak
+ * şekilde yeniden düzenlendi.
+ * - 'FreeMove' modunu yönetecek 'HandleFreeMove()' metodu eklendi.
+ * - 'SetFreeMove()' adında yeni bir public metot eklendi.
+ * - 'CurrentMode' değişkeni zaten public olduğu için diğer script'ler
+ * (PlayerController gibi) tarafından okunabilir durumdadır.
  */
 
 using UnityEngine;
 
 namespace IndianOceanAssets.Engine2_5D
 {
-    // This class makes the camera follow a target transform with a specified offset.
     public class CameraFollow : MonoBehaviour
     {
-        /// <summary>
-        /// Sahnedeki tek CameraFollow script'ine statik erişim noktası.
-        /// </summary>
         public static CameraFollow Instance { get; private set; }
         
-        /// <summary>
-        /// Kameranın anlık davranış modlarını tanımlar.
-        /// </summary>
+        // --- DEĞİŞİKLİK BAŞLANGICI (Yeni Enum Değeri) ---
         public enum CameraMode
         {
             /// <summary>
-            /// 'target' olarak atanan objeyi 'offset' ile takip eder. (Varsayılan)
+            /// 'target' olarak atanan objeyi 'offset' ile takip eder.
             /// </summary>
             FollowTarget,
             
             /// <summary>
             /// Kamera tüm takip etme davranışlarını durdurur.
             /// </summary>
-            Independent 
+            Independent,
+            
+            /// <summary>
+            /// Kamera, 'playerInputHandler'dan gelen joystick verisi ile serbestçe hareket eder.
+            /// </summary>
+            FreeMove 
         }
+        // --- DEĞİŞİKLİK SONU ---
 
         [Header("Runtime Settings")]
         [Tooltip("Kameranın o anki modu. Oyun başlamadan önce veya oyun sırasında değiştirilerek test edilebilir.")]
-        [SerializeField] public CameraMode CurrentMode = CameraMode.FollowTarget; // Varsayılan değeri burada atamak daha sağlıklıdır.
+        [SerializeField] public CameraMode CurrentMode = CameraMode.FollowTarget;
         
         [Header("Target Settings")]
-        [Tooltip("Kameranın takip edeceği varsayılan hedef (Genellikle Oyuncu).")]
+        [Tooltip("Kameranın 'FollowTarget' modunda takip edeceği hedef (Genellikle Oyuncu).")]
         [SerializeField] private Transform target;
         
         [Tooltip("Takip ederken hedeften ne kadar uzakta duracağı (pozisyonel fark).")]
         [SerializeField] private Vector3 offset;
 
         [Header("Movement Settings")]
-        [Tooltip("Kameranın hedefi takip etme yumuşaklığı (Lerp hızı).")]
+        [Tooltip("'FollowTarget' modundaki takip yumuşaklığı (Lerp hızı).")]
         [SerializeField] private float followSpeed = 8f;
+        
+        // --- DEĞİŞİKLİK BAŞLANGICI (Yeni Değişkenler) ---
+        [Header("Free Move Settings (Strateji Modu)")]
+        [Tooltip("Oyuncunun 'FloatingJoystick' verisini okumak için 'PlayerInputHandler' referansı." + 
+                 " (Genellikle Oyuncu objesinden sürükleyin)")]
+        [SerializeField] private PlayerInputHandler playerInputHandler;
+        
+        [Tooltip("'FreeMove' modundaki kameranın hareket hızı.")]
+        [SerializeField] private float freeMoveSpeed = 10f;
+        // --- DEĞİŞİKLİK SONU ---
         
         
         private void Awake()
@@ -62,24 +80,47 @@ namespace IndianOceanAssets.Engine2_5D
             }
             Instance = this;
             
-            // --- DEĞİŞİKLİK BAŞLANGICI ---
-            // Bu satır, Inspector'da yaptığınız ayarı eziyordu.
-            // Değişkenin varsayılan değeri artık yukarıda, tanımlandığı satırda veriliyor.
-            // CurrentMode = CameraMode.FollowTarget; // <-- BU SATIR KALDIRILDI/YORUMA ALINDI
+            // --- DEĞİŞİKLİK BAŞLANGICI (Güvenlik Kontrolü) ---
+            // 'playerInputHandler' Inspector'dan atanmamışsa,
+            // sahnede bulmayı dene. Bu, modülerliği artırır.
+            if (playerInputHandler == null)
+            {
+                playerInputHandler = FindObjectOfType<PlayerInputHandler>();
+                if (playerInputHandler == null)
+                {
+                    Debug.LogWarning("CameraFollow: 'FreeMove' modu için 'PlayerInputHandler' referansı " +
+                                     "ne Inspector'dan atandı ne de sahnede bulundu. " +
+                                     "FreeMove modu çalışmayabilir.");
+                }
+            }
             // --- DEĞİŞİKLİK SONU ---
         }
 
-
-        // Called once per frame.
+        // --- DEĞİŞİKLİK BAŞLANGICI: 'Update' metodu 'switch' yapısına geçirildi ---
         private void Update()
         {
-            // 1. Kameranın modu 'Independent' (Bağımsız) ise, HİÇBİR ŞEY YAPMA.
-            if (CurrentMode == CameraMode.Independent)
+            // O anki moda göre ilgili fonksiyonu çalıştır
+            switch (CurrentMode)
             {
-                return; // Takip etme mantığını atla
+                case CameraMode.FollowTarget:
+                    HandleFollowTarget();
+                    break;
+                
+                case CameraMode.FreeMove:
+                    HandleFreeMove();
+                    break;
+                    
+                case CameraMode.Independent:
+                    // Independent modda hiçbir şey yapma
+                    break;
             }
+        }
 
-            // 2. Eğer mod 'FollowTarget' ise ve hedef varsa, takip et.
+        /// <summary>
+        /// 'FollowTarget' modunun mantığını yönetir.
+        /// </summary>
+        private void HandleFollowTarget()
+        {
             if (target != null)
             {
                 transform.position = Vector3.Lerp(
@@ -89,36 +130,64 @@ namespace IndianOceanAssets.Engine2_5D
                 );
             }
         }
+
+        /// <summary>
+        /// YENİ METOT: 'FreeMove' modunun mantığını yönetir.
+        /// </summary>
+        private void HandleFreeMove()
+        {
+            // 1. Input Handler referansı var mı diye kontrol et
+            if (playerInputHandler == null)
+            {
+                return; // Input kaynağı yoksa hareket etme
+            }
+
+            // 2. PlayerInputHandler'dan (yani oyuncu joystick'inden) input'u oku
+            Vector2 input = playerInputHandler.MoveInput;
+
+            // 3. Sıfırdan farklı bir hareket var mı kontrol et
+            if (input == Vector2.zero)
+            {
+                return; // Hareket yoksa işlem yapma
+            }
+            
+            // 4. Hareket vektörü oluştur (Joystick Y -> Dünya Z)
+            Vector3 movement = new Vector3(input.x, 0f, input.y);
+
+            // 5. Kameranın pozisyonunu güncelle
+            transform.position += movement * freeMoveSpeed * Time.deltaTime;
+        }
+        // --- DEĞİŞİKLİK SONU ---
+        
         
         // --- PUBLIC API (Dışarıdan Komutlar) ---
         
-        /// <summary>
-        /// Kameranın modunu değiştirir (FollowTarget veya Independent).
-        /// </summary>
         public void SetMode(CameraMode newMode)
         {
             CurrentMode = newMode;
         }
         
-        /// <summary>
-        /// Kamerayı 'Independent' (Bağımsız) moda alır ve takibi durdurur.
-        /// </summary>
         public void SetIndependent()
         {
             SetMode(CameraMode.Independent);
         }
 
-        /// <summary>
-        /// Kamerayı 'FollowTarget' (Hedef Takip) moduna alır.
-        /// </summary>
         public void FollowTarget()
         {
             SetMode(CameraMode.FollowTarget);
         }
 
+        // --- DEĞİŞİKLİK BAŞLANGICI (Yeni Public Metot) ---
         /// <summary>
-        /// Kameranın takip ettiği hedefi anlık olarak değiştirir.
+        /// Kamerayı 'FreeMove' (Serbest Dolaşım) moduna alır.
+        /// (Bu metodu UI'daki bir butona bağlayabilirsiniz)
         /// </summary>
+        public void SetFreeMove()
+        {
+            SetMode(CameraMode.FreeMove);
+        }
+        // --- DEĞİŞİKLİK SONU ---
+
         public void SetTarget(Transform newTarget)
         {
             target = newTarget;

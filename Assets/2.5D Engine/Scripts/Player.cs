@@ -11,13 +11,9 @@ namespace IndianOceanAssets.Engine2_5D
     [RequireComponent(typeof(PlayerInputHandler))]
     [RequireComponent(typeof(PlayerStats))] 
     
-    // --- YENİ EKLENEN KISIM BAŞLANGICI ---
-    // 'IAttackStateProvider' arayüzünü uyguladığımızı (implemente ettiğimizi) belirtiyoruz.
     public class PlayerController : MonoBehaviour, IAttackStateProvider
-    // --- YENİ EKLENEN KISIM SONU ---
     {
         [Header("Stats Data")]
-        // Player'ın anlık stat'larını yöneten component'e referans
         private PlayerStats playerStats;
 
         [Header("Attack Settings")]
@@ -31,6 +27,11 @@ namespace IndianOceanAssets.Engine2_5D
         private Rigidbody rb;
         private Animator animator;
         private PlayerInputHandler inputHandler;
+        
+        // --- DEĞİŞİKLİK BAŞLANGICI (Kamera Referansı) ---
+        // Kameranın mevcut modunu sorgulamak için referans
+        private CameraFollow cameraFollow;
+        // --- DEĞİŞİKLİK SONU ---
 
         // Dahili durum değişkenleri
         private Vector2 inputDirection;
@@ -44,7 +45,7 @@ namespace IndianOceanAssets.Engine2_5D
             rb = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputHandler = GetComponent<PlayerInputHandler>();
-            playerStats = GetComponent<PlayerStats>(); // Referansı Awake'te al
+            playerStats = GetComponent<PlayerStats>();
             
             Application.targetFrameRate = 60;
         }
@@ -60,14 +61,35 @@ namespace IndianOceanAssets.Engine2_5D
             {
                 Debug.LogError("PlayerController üzerinde 'PlayerStats' component'i bulunamadı!");
             }
+            
+            // --- DEĞİŞİKLİK BAŞLANGICI (Kamera Referansı Alma) ---
+            // CameraFollow Singleton'ına eriş
+            cameraFollow = CameraFollow.Instance;
+            if (cameraFollow == null)
+            {
+                Debug.LogError("PlayerController: Sahnede 'CameraFollow' component'i (Instance) bulunamadı! " +
+                               "Kamera modu kontrolleri çalışmayacak.");
+            }
+            // --- DEĞİŞİKLİK SONU ---
         }
 
         private void Update()
         {
-            inputDirection = inputHandler.MoveInput;
+            // --- DEĞİŞİKLİK BAŞLANGICI (Kamera Modu Kontrolü) ---
+            // Kamerayı (Singleton) kontrol et.
+            // Eğer kamera 'FreeMove' modundaysa, oyuncu input'unu sıfırla (hareket etme).
+            if (cameraFollow != null && cameraFollow.CurrentMode == CameraFollow.CameraMode.FreeMove)
+            {
+                inputDirection = Vector2.zero;
+            }
+            else
+            {
+                // Kamera serbest modda değilse, normal oyuncu input'unu al
+                inputDirection = inputHandler.MoveInput;
+            }
+            // --- DEĞİŞİKLİK SONU ---
             
             // IsMoving bayrağını güncelle.
-            // (Bu, AutoAttack tarafından değil, animasyon ve Move() tarafından kullanılır)
             IsMoving = inputDirection != Vector2.zero;
 
             if (!isRolling)
@@ -82,38 +104,34 @@ namespace IndianOceanAssets.Engine2_5D
             if (!isRolling)
                 Move();
         }
-
-        // --- YENİ EKLENEN FONKSİYON BAŞLANGICI ---
-        /// <summary>
-        /// IAttackStateProvider arayüzünden gelen zorunlu metot.
-        /// AutoAttack'a saldırıp saldıramayacağını söyler.
-        /// </summary>
-        /// <returns>True (saldırabilir), False (saldıramaz)</returns>
+        
         public bool CanAttack()
         {
-            // PlayerStats'tan "hareketliyken ateş etme" ayarını oku
+            // --- DEĞİŞİKLİK (Güvenlik Kontrolü) ---
+            // Eğer kamera serbest dolaşım modundaysa, oyuncu saldıramaz.
+            if (cameraFollow != null && cameraFollow.CurrentMode == CameraFollow.CameraMode.FreeMove)
+            {
+                return false;
+            }
+            // --- DEĞİŞİKLİK SONU ---
+            
             bool canFireWhileMoving = playerStats.CurrentCanFireWhileMoving;
-
-            // Eğer hareket ediyorsam VE hareketliyken ateş etme yeteneğim YOKSA,
-            // saldıramam.
+            
             if (IsMoving && !canFireWhileMoving)
             {
                 return false; 
             }
-
-            // (Gelecekte buraya 'isStunned' (sersemlemiş) gibi başka kontroller de ekleyebilirsin)
-            // if (isStunned) return false;
-
-            // Diğer tüm durumlarda (duruyorsam VEYA hareketliyken ateş edebiliyorsam)
-            // saldırabilirim.
+            
             return true;
         }
-        // --- YENİ EKLENEN FONKSİYON SONU ---
 
         private void Move()
         {
             if (playerStats == null) return; 
 
+            // Not: 'inputDirection' zaten Update() içinde kamera moduna
+            // göre sıfırlandığı için bu metot 'FreeMove' modunda
+            // otomatik olarak (0,0,0) hareket uygulayacaktır (yani hareket etmeyecektir).
             Vector3 movement = new Vector3(inputDirection.x, 0f, inputDirection.y) * playerStats.CurrentMoveSpeed * Time.fixedDeltaTime;
             rb.MovePosition(rb.position + movement);
         }
@@ -135,6 +153,14 @@ namespace IndianOceanAssets.Engine2_5D
         public void AttemptRoll()
         {
             if (playerStats == null) return;
+            
+            // --- DEĞİŞİKLİK BAŞLANGICI (Kamera Modu Kontrolü) ---
+            // Eğer kamera serbest dolaşım modundaysa, oyuncu takla atamaz.
+            if (cameraFollow != null && cameraFollow.CurrentMode == CameraFollow.CameraMode.FreeMove)
+            {
+                return; // Takla atma
+            }
+            // --- DEĞİŞİKLİK SONU ---
             
             if(Time.time > lastRollTime + playerStats.CurrentRollCooldown && !isRolling)
             {

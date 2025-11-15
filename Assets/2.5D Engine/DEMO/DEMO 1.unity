@@ -877,6 +877,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4664936459936423264, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+      propertyPath: m_DefaultControlScheme
+      value: Joystick
+      objectReference: {fileID: 0}
+    - target: {fileID: 4664936459936423264, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+      propertyPath: m_NeverAutoSwitchControlSchemes
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6548415084739001889, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: projectilePrefab
       value: 
@@ -1742,10 +1750,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: beb5f0bbc354f5d449eea8768c752e72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CurrentMode: 0
+  CurrentMode: 2
   target: {fileID: 441783843}
   offset: {x: 0, y: 6.72, z: -8.68}
   followSpeed: 8
+  playerInputHandler: {fileID: 1167473084}
+  freeMoveSpeed: 10
 --- !u!4 &331731258 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3758831290525234046, guid: c8ebec87794f9e541b3416e11049afa7, type: 3}
@@ -6579,6 +6589,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bc7527fe035c7394b9db6335ab54deb3, type: 3}
+--- !u!114 &1167473084 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6855774729738967386, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+  m_PrefabInstance: {fileID: 188104320}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0de007876f71d4a6d96862e5571263bc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerInputHandler
 --- !u!1001 &1174875816
 PrefabInstance:
   m_ObjectHideFlags: 0
