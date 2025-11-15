@@ -1,23 +1,20 @@
 /*
- * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.1)
+ * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.2)
  *
- * * DEĞİŞİKLİKLER (v3.1 - Yol Takibi Düzeltmesi):
- * - 'HandleFollowPathMovement()' metodu güncellendi.
- * - Artık 'targetWaypoint.position'ı doğrudan hedef almıyor.
- * - 'targetPositionOnGround' adında geçici bir Vector3 oluşturuluyor.
- * - Bu yeni vektör, waypoint'in X ve Z'sini, ancak düşmanın KENDİ Y
- * pozisyonunu alır (transform.position.y).
- * - 'MoveTowards' ve 'Distance' hesaplamaları artık bu 'targetPositionOnGround'
- * vektörünü kullanır.
- * - BU DÜZELTME, düşmanın Y ekseninde (havada) olan waypoint'lere
- * takılıp kalmasını engeller ve hareketi XZ düzlemine kilitler.
+ * * DEĞİŞİKLİKLER (v3.2 - Görsel Entegrasyonu):
+ * - 'Awake()' metodu artık 'InitializeVisuals()' adında yeni bir
+ * fonksiyonu çağırıyor.
+ * - 'InitializeVisuals()' (YENİ METOT): 'spriteRenderer' referansını
+ * kontrol eder ve 'enemyData' içindeki 'characterSprite'ı atar.
+ * - Bu, tıpkı 'PlayerStats' component'i gibi, görsellerin de
+ * data-driven olmasını sağlar.
  */
 
 using UnityEngine;
 
 namespace IndianOceanAssets.Engine2_5D
 {
-    [RequireComponent(typeof(HealthSystem))]
+    [RequireComponent(typeof(HealthSystem))] 
     public class EnemyAI : MonoBehaviour
     {
         [Header("Veri Kaynağı (ZORUNLU)")]
@@ -26,13 +23,14 @@ namespace IndianOceanAssets.Engine2_5D
         [SerializeField] private EnemyData enemyData;
 
         [Header("Bileşen Referansları")]
-        [Tooltip("Yön değiştirdiğinde dönecek olan Sprite Renderer.")]
+        [Tooltip("Yön değiştirdiğinde dönecek ve 'EnemyData'dan sprite alacak " +
+                 "Renderer. (Genellikle GFX alt objesindedir)")]
         [SerializeField] private SpriteRenderer spriteRenderer;
 
         // --- Motorun Anlık (Runtime) Verileri ---
-        private Transform chaseTarget;          // 'ChasePlayer' modu için hedef (Oyuncu)
-        private Transform[] currentPathWaypoints; // 'FollowPath' modu için hedef yol
-        private int currentWaypointIndex = 0;   // Yolda kaçıncı noktada olduğu
+        private Transform chaseTarget;          
+        private Transform[] currentPathWaypoints; 
+        private int currentWaypointIndex = 0;   
         
         private void Awake()
         {
@@ -41,18 +39,57 @@ namespace IndianOceanAssets.Engine2_5D
                 Debug.LogError($"'{gameObject.name}' üzerinde 'EnemyData' asset'i atanmamış! " +
                                "EnemyAI çalışmayacak.", this);
                 this.enabled = false; 
+                return; // 'enemyData' yoksa devam etme
             }
+            
+            // --- DEĞİŞİKLİK BAŞLANGICI (v3.2) ---
+            // 'enemyData' bulunduğuna göre, görselleri ata.
+            // Bu, havuzdan çıksa bile sadece bir kez (veya prefab güncellenirse)
+            // çalışır ve sprite'ı ayarlar.
+            InitializeVisuals();
+            // --- DEĞİŞİKLİK SONU ---
         }
         
+        // --- DEĞİŞİKLİK BAŞLANGICI (v3.2 - YENİ METOT) ---
         /// <summary>
-        /// YENİ METOT: Bu düşmanın motorunu başlatır.
-        /// 'WaveManager' tarafından spawn edildikten hemen sonra çağrılır.
+        /// 'EnemyData'dan okunan 'characterSprite'ı 'spriteRenderer'a atar.
+        /// Tıpkı 'PlayerStats'taki 'InitializeVisuals' gibi çalışır.
+        /// </summary>
+        private void InitializeVisuals()
+        {
+            // 1. Inspector'da bir SpriteRenderer atanmış mı?
+            if (spriteRenderer == null)
+            {
+                // Atanmamış. Bu bir hata değil, belki bu AI'ın
+                // sprite'ı yoktur. Uyarı verip geç.
+                Debug.LogWarning($"'{gameObject.name}' üzerindeki EnemyAI'a bir 'Sprite Renderer' " +
+                                 "atanmamış. Görsel ayarlanmayacak.", this);
+                return;
+            }
+
+            // 2. 'EnemyData' asset'inde bir sprite tanımlanmış mı?
+            if (enemyData.characterSprite != null)
+            {
+                // Evet, sprite'ı ata.
+                spriteRenderer.sprite = enemyData.characterSprite;
+            }
+            else
+            {
+                // Renderer var ama data'da sprite yok.
+                Debug.LogWarning($"'{enemyData.name}' asset'inde 'Character Sprite' alanı boş. " +
+                                 $"'{spriteRenderer.name}' üzerindeki mevcut sprite korunacak.", this);
+            }
+        }
+        // --- DEĞİŞİKLİK SONU ---
+        
+        /// <summary>
+        /// Bu düşmanın motorunu başlatır ('WaveManager' tarafından çağrılır).
         /// </summary>
         public void Initialize(Transform targetToChase, Transform[] path)
         {
             this.chaseTarget = targetToChase;
             this.currentPathWaypoints = path;
-            this.currentWaypointIndex = 0; // Her spawn'da sıfırla
+            this.currentWaypointIndex = 0; 
             
             if (enemyData.movementType == MovementType.ChasePlayer && this.chaseTarget == null)
             {
@@ -67,7 +104,7 @@ namespace IndianOceanAssets.Engine2_5D
         }
         
         /// <summary>
-        /// 'Update' artık 'enemyData'dan okunan veriye göre bir yönlendiricidir.
+        /// 'Update' yönlendiricisi (Değişiklik yok)
         /// </summary>
         public void Update()
         {
@@ -78,20 +115,18 @@ namespace IndianOceanAssets.Engine2_5D
                 case MovementType.ChasePlayer:
                     HandleChasePlayerMovement();
                     break;
-
                 case MovementType.FollowPath:
                     HandleFollowPathMovement();
                     break;
-
                 case MovementType.FixedDirection:
                     HandleFixedDirectionMovement();
                     break;
             }
         }
 
-        /// <summary>
-        /// MOD 1: Oyuncuyu Takip Etme
-        /// </summary>
+        // --- HAREKET METOTLARI (v3.1 - Değişiklik yok) ---
+        #region Movement Handlers (No Change)
+        
         private void HandleChasePlayerMovement()
         {
             if (chaseTarget)
@@ -108,69 +143,47 @@ namespace IndianOceanAssets.Engine2_5D
                 );
             }
         }
-
-        /// <summary>
-        /// MOD 2: Yolu Takip Etme (v3.1 Y-Ekseni Düzeltmesi ile)
-        /// </summary>
+        
         private void HandleFollowPathMovement()
         {
             if (currentPathWaypoints == null || currentPathWaypoints.Length == 0)
             {
-                return; // Takip edilecek yol yoksa dur.
+                return; 
             }
             
-            // 1. Hedef waypoint'i belirle
             if (currentWaypointIndex >= currentPathWaypoints.Length)
             {
-                if (enemyData.loopPath)
-                {
-                    currentWaypointIndex = 0; // Başa dön
-                }
-                else
-                {
-                    return; // Yol bittiyse dur
-                }
+                if (enemyData.loopPath) { currentWaypointIndex = 0; }
+                else { return; }
             }
             
             Transform targetWaypoint = currentPathWaypoints[currentWaypointIndex];
             if (targetWaypoint == null) return;
             
-            // --- DEĞİŞİKLİK BAŞLANGICI (v3.1 - Y Ekseni Düzeltmesi) ---
-            
-            // 2. Hedef pozisyonu al, ANCAK Y eksenini (yüksekliği)
-            //    düşmanın kendi Y ekseni olarak ayarla.
-            //    Bu, düşmanın havada bir noktaya ulaşmaya çalışmasını engeller.
+            // 2.5D (Y-Ekseni) düzeltmesi
             Vector3 targetPositionOnGround = new Vector3(
                 targetWaypoint.position.x, 
-                transform.position.y, // Düşmanın kendi Y yüksekliğini kullan
+                transform.position.y, 
                 targetWaypoint.position.z
             );
 
-            // 3. Sprite yönünü bu XZ hedefli pozisyona göre ayarla
             if (targetPositionOnGround.x > transform.position.x)
                 spriteRenderer.flipX = false;
             else
                 spriteRenderer.flipX = true;
             
-            // 4. Yerdeki hedef pozisyona doğru hareket et
             transform.position = Vector3.MoveTowards(
                 transform.position, 
-                targetPositionOnGround, // Düzeltilmiş hedefi kullan
+                targetPositionOnGround, 
                 Time.deltaTime * enemyData.speed
             );
 
-            // 5. Hedefe ulaşıp ulaşmadığımızı KONTROL EDERKEN de
-            //    Y eksenini görmezden gelmeliyiz. (Mesafe artık 0.1f'in altına inebilir)
             if (Vector3.Distance(transform.position, targetPositionOnGround) < 0.1f)
             {
-                currentWaypointIndex++; // Bir sonraki noktaya geç
+                currentWaypointIndex++; 
             }
-            // --- DEĞİŞİKLİK SONU ---
         }
 
-        /// <summary>
-        /// MOD 3: Sabit Yönde İlerleme
-        /// </summary>
         private void HandleFixedDirectionMovement()
         {
             if (enemyData.fixedDirection.x > 0.01f)
@@ -181,8 +194,10 @@ namespace IndianOceanAssets.Engine2_5D
             transform.position += enemyData.fixedDirection.normalized * enemyData.speed * Time.deltaTime;
         }
         
+        #endregion
+
         /// <summary>
-        /// Çarpışma mantığı - Hasarı 'enemyData'dan alıyor
+        /// Çarpışma mantığı (Değişiklik yok)
         /// </summary>
         void OnCollisionEnter(Collision collision)
         {
@@ -196,7 +211,7 @@ namespace IndianOceanAssets.Engine2_5D
         }
         
         /// <summary>
-        /// 'HealthSystem'in can verisini alması için.
+        /// 'HealthSystem'in can verisini alması için (Değişiklik yok)
         /// </summary>
         public int GetMaxHealthFromData()
         {
