@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 772cc516b38fa4ec48fa83231ba24b3e, type: 3}
   m_Name: Dalga 1
   m_EditorClassIdentifier: 
-  roundDuration: 60
+  roundDuration: 300
   victoryDelay: 1
   spawnEvents:
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 3ab93720f74ea4e81aba1a449535352d, type: 3}
+  - enemyDataToSpawn: {fileID: 11400000, guid: 390874436c26c4f90b4ef9db33df839c, type: 2}
     spawnPointID: 0
     pathID: 1
     triggerTime: 0
@@ -25,7 +25,7 @@ MonoBehaviour:
     endTime: 0
     count: 5
     spawnInterval: 1
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+  - enemyDataToSpawn: {fileID: 11400000, guid: 86c558070ad87409aa1eb2e7c9ad043f, type: 2}
     spawnPointID: 1
     pathID: -1
     triggerTime: 1
@@ -35,7 +35,7 @@ MonoBehaviour:
     endTime: 10
     count: 1
     spawnInterval: 1
-  - enemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
+  - enemyDataToSpawn: {fileID: 11400000, guid: 86c558070ad87409aa1eb2e7c9ad043f, type: 2}
     spawnPointID: 2
     pathID: -1
     triggerTime: 3

@@ -1,13 +1,13 @@
 /*
- * SPAWN EVENT DRAWER (GÜNCELLENDİ - v1.1)
+ * SPAWN EVENT DRAWER (GÜNCELLENDİ - v2.0 Data-Driven)
  *
- * GÖREVİ: 'SpawnEvent' sınıfının Inspector'da nasıl görüneceğini özelleştirir.
- *
- * * DEĞİŞİKLİKLER (v1.1):
- * - 'pathID' alanı eklendi.
- * - 'OnGUI' metodu artık 'pathID'yi bulup 'spawnPointID'nin altına çiziyor.
- * - 'GetPropertyHeight' metodu, 'pathID' için ayrılan ekstra satır
- * yüksekliğini hesaba katacak şekilde güncellendi (6 satırdan 7 satıra).
+ * * DEĞİŞİKLİKLER (v2.0):
+ * - 'enemyPrefabProp' araması, 'enemyDataProp' ('enemyDataToSpawn')
+ * araması ile DEĞİŞTİRİLDİ.
+ * - 'OnGUI' metodu artık 'enemyPrefab' yerine 'enemyDataToSpawn'
+ * alanını çiziyor.
+ * - Yükseklik hesabı (GetPropertyHeight) değişmedi, çünkü sadece
+ * bir alanı diğeriyle değiştirdik (1 satıra karşılık 1 satır).
  */
 
 using UnityEngine;
@@ -36,13 +36,15 @@ public class SpawnEventDrawer : PropertyDrawer
         position.y += lineHeight + spacing;
 
         // --- Gerekli Özellikleri Bul ---
-        SerializedProperty enemyPrefabProp = property.FindPropertyRelative("enemyPrefab");
-        SerializedProperty spawnPointIDProp = property.FindPropertyRelative("spawnPointID");
         
         // --- DEĞİŞİKLİK BAŞLANGICI ---
-        SerializedProperty pathIDProp = property.FindPropertyRelative("pathID"); // YENİ eklendi
+        // "enemyPrefab" yerine "enemyDataToSpawn" alanını arıyoruz.
+        SerializedProperty enemyDataProp = property.FindPropertyRelative("enemyDataToSpawn");
+        // SerializedProperty enemyPrefabProp = property.FindPropertyRelative("enemyPrefab"); // <-- SİLİNDİ
         // --- DEĞİŞİKLİK SONU ---
         
+        SerializedProperty spawnPointIDProp = property.FindPropertyRelative("spawnPointID");
+        SerializedProperty pathIDProp = property.FindPropertyRelative("pathID"); 
         SerializedProperty triggerTimeProp = property.FindPropertyRelative("triggerTime");
         SerializedProperty isPeriodicProp = property.FindPropertyRelative("isPeriodic");
         SerializedProperty repeatIntervalProp = property.FindPropertyRelative("repeatInterval");
@@ -53,17 +55,17 @@ public class SpawnEventDrawer : PropertyDrawer
         
         // --- Özellikleri Sırayla Çiz ---
         
-        EditorGUI.PropertyField(position, enemyPrefabProp);
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        EditorGUI.PropertyField(position, enemyDataProp); // <-- DEĞİŞTİ
+        // EditorGUI.PropertyField(position, enemyPrefabProp); // <-- SİLİNDİ
+        // --- DEĞİŞİKLİK SONU ---
         position.y += lineHeight + spacing;
 
         EditorGUI.PropertyField(position, spawnPointIDProp);
         position.y += lineHeight + spacing;
 
-        // --- DEĞİŞİKLİK BAŞLANGICI ---
-        // 'pathID' alanını 'spawnPointID'nin hemen altına çiz
         EditorGUI.PropertyField(position, pathIDProp); 
         position.y += lineHeight + spacing;
-        // --- DEĞİŞİKLİK SONU ---
 
         EditorGUI.PropertyField(position, triggerTimeProp);
         position.y += lineHeight + spacing;
@@ -82,10 +84,8 @@ public class SpawnEventDrawer : PropertyDrawer
         if (isPeriodic)
         {
             EditorGUI.indentLevel++; 
-            
             EditorGUI.PropertyField(position, repeatIntervalProp);
             position.y += lineHeight + spacing;
-            
             EditorGUI.PropertyField(position, hasFiniteDurationProp);
             position.y += lineHeight + spacing;
 
@@ -95,7 +95,6 @@ public class SpawnEventDrawer : PropertyDrawer
                 EditorGUI.PropertyField(position, endTimeProp);
                 position.y += lineHeight + spacing;
             }
-            
             EditorGUI.indentLevel--;
         }
 
@@ -103,9 +102,9 @@ public class SpawnEventDrawer : PropertyDrawer
         EditorGUI.EndProperty();
     }
 
-    // --- DEĞİŞİKLİK BAŞLANGICI (Yükseklik Hesabı) ---
-    // 'GetPropertyHeight' metodu, Inspector'da ne kadar yer
-    // ayıracağını hesaplar. 'pathID' için 1 satır daha eklemeliyiz.
+    // Yükseklik hesabı (GetPropertyHeight) değişmedi,
+    // çünkü 1 satırlık 'enemyPrefab' alanını, 1 satırlık
+    // 'enemyDataToSpawn' alanı ile değiştirdik.
     public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
     {
         if (!property.isExpanded)
@@ -117,14 +116,13 @@ public class SpawnEventDrawer : PropertyDrawer
         float lineHeight = EditorGUIUtility.singleLineHeight;
         float spacing = EditorGUIUtility.standardVerticalSpacing;
 
-        // 1. Foldout başlığı
         totalHeight += lineHeight + spacing; 
         
-        // 2. 'enemyPrefab', 'spawnPointID', 'pathID' (YENİ), 'triggerTime',
-        //    'count', 'spawnInterval', 'isPeriodic' (TOPLAM 7 SATIR)
-        totalHeight += (lineHeight + spacing) * 7; // <-- BU SATIR 6'dan 7'ye güncellendi
+        // enemyData, spawnPointID, pathID, triggerTime,
+        // count, spawnInterval, isPeriodic (Hala TOPLAM 7 SATIR)
+        totalHeight += (lineHeight + spacing) * 7; 
 
-        // 3. Koşullu satırları hesapla
+        // Koşullu satırlar
         SerializedProperty isPeriodicProp = property.FindPropertyRelative("isPeriodic");
         if (isPeriodicProp.boolValue)
         {
@@ -139,5 +137,4 @@ public class SpawnEventDrawer : PropertyDrawer
         
         return totalHeight;
     }
-    // --- DEĞİŞİKLİK SONU ---
 }

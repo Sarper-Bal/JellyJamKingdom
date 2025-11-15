@@ -1,13 +1,14 @@
 /*
- * DÜŞMAN VERİSİ (SCRIPTABLE OBJECT) - v1.2
+ * DÜŞMAN VERİSİ (SCRIPTABLE OBJECT) - v1.3
  * * DEĞİŞİKLİKLER:
- * - 'Görsel' bölümüne 'scale' (Vector3) alanı eklendi.
- * - Varsayılan değeri (1, 1, 1) olarak ayarlandı.
+ * - 'Görsel' bölümüne 'deathEffectPrefab' eklendi.
+ * - Bu, artık ölüm efektinin bile data-driven olmasını sağlar.
+ * - WaveManager, havuz hesaplaması yaparken bu prefab'ı okuyacak.
  */
 
 using UnityEngine;
 
-// Enum (MovementType) değişmedi, aynı kalıyor
+// Enum (MovementType) değişmedi
 public enum MovementType
 {
     ChasePlayer,
@@ -32,13 +33,15 @@ public class EnemyData : ScriptableObject
     public int damageAmount = 10;
     
     [Header("Görsel")]
-    [Tooltip("Bu düşman tipinin kullanacağı ana Sprite. " +
-             "EnemyAI'daki Sprite Renderer'a atanacak.")]
+    [Tooltip("Bu düşman tipinin kullanacağı ana Sprite.")]
     public Sprite characterSprite;
     
-    // --- DEĞİŞİKLİK BAŞLANGICI ---
     [Tooltip("Düşman prefab'ının ana transform'unun varsayılan boyutu (scale).")]
-    public Vector3 scale = Vector3.one; // Vector3.one = (1, 1, 1)
+    public Vector3 scale = Vector3.one;
+    
+    // --- DEĞİŞİKLİK BAŞLANGICI ---
+    [Tooltip("Bu düşman öldüğünde 'ObjectPooler'dan spawn edilecek efekt prefab'ı.")]
+    public GameObject deathEffectPrefab; // <-- YENİ EKLENDİ
     // --- DEĞİŞİKLİK SONU ---
     
     [Header("Yapay Zeka Davranışı")]

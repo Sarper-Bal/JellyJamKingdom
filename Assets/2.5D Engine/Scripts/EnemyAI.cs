@@ -1,11 +1,21 @@
 /*
- * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.3)
+ * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v4.0)
  *
- * * DEĞİŞİKLİKLER (v3.3 - Scale Entegrasyonu):
- * - 'InitializeVisuals()' metodu güncellendi.
- * - Artık 'enemyData'dan 'scale' verisini okuyor ve bunu
- * doğrudan bu objenin 'transform.localScale'ine atıyor.
- * - Bu, düşmanın boyutunun da data-driven olmasını sağlar.
+ * GÖREVİ:
+ * Bu script artık bir "MOTOR"dur. Veriyi Inspector'dan ALMAZ.
+ * 'WaveManager' tarafından 'Initialize' metodu çağrıldığında
+ * ilgili 'EnemyData' (statlar) atanır ve motor çalışır.
+ *
+ * * DEĞİŞİKLİKLER (v4.0):
+ * - '[SerializeField] private EnemyData enemyData' alanı,
+ * 'private EnemyData enemyData' olarak değiştirildi (Artık Inspector'dan atanmıyor).
+ * - 'Initialize()' metodunun imzası DEĞİŞTİ. Artık ilk parametre
+ * olarak 'EnemyData' alıyor.
+ * - 'Awake()' metodu 'HealthSystem' referansını alacak şekilde güncellendi.
+ * - 'Initialize()' metodu artık 'InitializeVisuals()'ı çağırıyor VE
+ * 'healthSystem.InitializeFromData()'yı tetikliyor.
+ * - 'GetMaxHealthFromData()' SİLİNDİ.
+ * - 'GetDeathEffectFromData()' EKLENDİ (HealthSystem'in kullanması için).
  */
 
 using UnityEngine;
@@ -15,12 +25,18 @@ namespace IndianOceanAssets.Engine2_5D
     [RequireComponent(typeof(HealthSystem))] 
     public class EnemyAI : MonoBehaviour
     {
-        [Header("Veri Kaynağı (ZORUNLU)")]
-        [SerializeField] private EnemyData enemyData;
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        // 'SerializeField' kaldırıldı. Bu veri artık 'Initialize'
+        // metodu ile dışarıdan (WaveManager'dan) yüklenecek (DI - Dependency Injection).
+        private EnemyData enemyData;
+        // --- DEĞİŞİKLİK SONU ---
 
         [Header("Bileşen Referansları")]
         [Tooltip("Görseli (Sprite) ayarlamak için GFX objesinin SpriteRenderer'ı.")]
         [SerializeField] private SpriteRenderer spriteRenderer;
+
+        // --- Gerekli Component Referansları ---
+        private HealthSystem healthSystem;
 
         // --- Motorun Anlık (Runtime) Verileri ---
         private Transform chaseTarget;          
@@ -29,84 +45,87 @@ namespace IndianOceanAssets.Engine2_5D
         
         private void Awake()
         {
-            if (enemyData == null)
+            // Gerekli sistemleri bul ve sakla
+            healthSystem = GetComponent<HealthSystem>();
+            if (spriteRenderer == null)
             {
-                Debug.LogError($"'{gameObject.name}' üzerinde 'EnemyData' asset'i atanmamış! " +
-                               "EnemyAI çalışmayacak.", this);
-                this.enabled = false; 
-                return;
+                 Debug.LogWarning($"'{gameObject.name}' üzerinde 'Sprite Renderer' atanmamış. " +
+                                  "Görsel ayarları çalışmayacak.", this);
             }
-            
-            // Görselleri ve boyutu ayarla.
-            // Bu 'Awake'te yapılır, çünkü bu ayarlar spawn/despawn
-            // sırasında (OnEnable/OnDisable) sürekli değişmeyecek.
-            InitializeVisuals();
         }
         
         /// <summary>
-        /// 'EnemyData'dan görselleri ve boyutu okuyup ayarlar.
+        /// Düşman görsellerini ve boyutunu 'EnemyData'ya göre ayarlar.
+        /// Bu metot, 'Initialize' içinden çağrılır.
         /// </summary>
         private void InitializeVisuals()
         {
-            // 1. Sprite Ayarı (v3.2'den)
-            if (spriteRenderer == null)
+            // 1. Sprite Ayarı
+            if (spriteRenderer != null && enemyData.characterSprite != null)
             {
-                Debug.LogWarning($"'{gameObject.name}' üzerindeki EnemyAI'a 'Sprite Renderer' " +
-                                 "atanmamış. Görsel ayarlanmayacak.", this);
+                spriteRenderer.sprite = enemyData.characterSprite;
+            }
+
+            // 2. Scale (Boyut) Ayarı
+            if (enemyData.scale != Vector3.one && enemyData.scale != Vector3.zero)
+            {
+                transform.localScale = enemyData.scale;
             }
             else
             {
-                if (enemyData.characterSprite != null)
-                {
-                    spriteRenderer.sprite = enemyData.characterSprite;
-                }
-                else
-                {
-                    Debug.LogWarning($"'{enemyData.name}' asset'inde 'Character Sprite' alanı boş. " +
-                                     $"Mevcut sprite korunacak.", this);
-                }
+                // Eğer data'da (1,1,1) ise veya atanmamışsa,
+                // prefab'ın orijinal scale'ini kullan (sıfırlama)
+                transform.localScale = Vector3.one; 
             }
-            
-            // --- DEĞİŞİKLİK BAŞLANGICI (v3.3) ---
-            // 2. Scale (Boyut) Ayarı
-            // 'enemyData.scale' (1, 1, 1) değilse, prefab'ın ana scale'ini ez.
-            if (enemyData.scale != Vector3.one && enemyData.scale != Vector3.zero)
-            {
-                // İsteğiniz üzerine GFX'in değil, doğrudan bu component'in
-                // bağlı olduğu 'transform'un scale'ini değiştiriyoruz.
-                transform.localScale = enemyData.scale;
-            }
-            // (Eğer data'da (1,1,1) ise, prefab'ın orijinal
-            // ayarını korumak için hiçbir şey yapmayız, bu da optimize bir yoldur)
-            // --- DEĞİŞİKLİK SONU ---
         }
         
+        // --- DEĞİŞİKLİK BAŞLANGICI (Yeni Initialize Metodu) ---
         /// <summary>
-        /// Bu düşmanın motorunu başlatır ('WaveManager' tarafından çağrılır).
+        /// YENİ METOT: Bu düşmanın motorunu başlatır.
+        /// 'WaveManager' tarafından spawn edildikten hemen sonra çağrılır.
         /// </summary>
-        public void Initialize(Transform targetToChase, Transform[] path)
+        /// <param name="data">Düşmanın tüm statlarını içeren ScriptableObject</param>
+        /// <param name="targetToChase">'ChasePlayer' modu için hedef (genellikle oyuncu)</param>
+        /// <param name="path">'FollowPath' modu için takip edilecek yol dizisi</param>
+        public void Initialize(EnemyData data, Transform targetToChase, Transform[] path)
         {
+            // 1. Veriyi (Statları) al
+            this.enemyData = data;
+            if (this.enemyData == null)
+            {
+                Debug.LogError("EnemyAI.Initialize() 'EnemyData' null olarak çağrıldı. Düşman çalışamaz.", this);
+                gameObject.SetActive(false); // Havuza anında geri dön
+                return;
+            }
+
+            // 2. Veriye göre görselleri ayarla (Sprite, Scale)
+            InitializeVisuals();
+            
+            // 3. Veriye göre canı ayarla (HealthSystem'i tetikle)
+            healthSystem.InitializeFromData(this.enemyData.maxHealth);
+
+            // 4. Davranışsal hedefleri ayarla
             this.chaseTarget = targetToChase;
             this.currentPathWaypoints = path;
-            this.currentWaypointIndex = 0; 
+            this.currentWaypointIndex = 0; // Her spawn'da sıfırla
             
-            // Uyarı kontrolleri (Değişiklik yok)
+            // 5. Hata Kontrolleri
             if (enemyData.movementType == MovementType.ChasePlayer && this.chaseTarget == null)
             {
                 Debug.LogWarning("EnemyAI: 'ChasePlayer' modunda ancak 'targetToChase' (Player) null geldi.", this);
             }
             if (enemyData.movementType == MovementType.FollowPath && (this.currentPathWaypoints == null || this.currentPathWaypoints.Length == 0))
             {
-                Debug.LogWarning("EnemyAI: 'FollowPath' modunda ancak 'path' (Waypoints) boş veya null geldi. " +
-                                 "Düşman hareket etmeyecek.", this);
+                Debug.LogWarning($"EnemyAI ({enemyData.name}): 'FollowPath' modunda ancak 'path' (Waypoints) " +
+                                 "boş veya null geldi. 'Initialize' çağrısını kontrol edin.", this);
             }
         }
+        // --- DEĞİŞİKLİK SONU ---
         
-        /// <summary>
-        /// 'Update' yönlendiricisi (Değişiklik yok)
-        /// </summary>
+        
         public void Update()
         {
+            // 'enemyData' atanmadıysa (Initialize edilmediyse) çalışma.
             if (enemyData == null) return;
             
             switch (enemyData.movementType)
@@ -123,16 +142,13 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- HAREKET VE DİĞER METOTLAR (v3.1 - Değişiklik yok) ---
-        #region Movement, Collision, and Data Accessors (No Change)
+        // --- HAREKET METOTLARI (v3.1 - Değişiklik yok) ---
+        #region Movement Handlers (No Change)
         
         private void HandleChasePlayerMovement()
         {
             if (chaseTarget)
             {
-                // Not: Sprite flip'leri 'transform.localScale'i ezmez,
-                // sadece X yönünü değiştirir. Bu yüzden scale
-                // sistemimizle uyumlu çalışır.
                 if (chaseTarget.position.x > transform.position.x)
                     spriteRenderer.flipX = false;
                 else
@@ -190,6 +206,8 @@ namespace IndianOceanAssets.Engine2_5D
             transform.position += enemyData.fixedDirection.normalized * enemyData.speed * Time.deltaTime;
         }
         
+        #endregion
+        
         void OnCollisionEnter(Collision collision)
         {
             if (enemyData == null) return; 
@@ -200,13 +218,18 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
         
-        public int GetMaxHealthFromData()
+        // --- DEĞİŞİKLİK BAŞLANGICI ---
+        /// <summary>
+        /// 'HealthSystem' tarafından 'Die' anında çağrılır.
+        /// 'EnemyData'da tanımlanan ölüm efektini döndürür.
+        /// </summary>
+        public GameObject GetDeathEffectFromData()
         {
-            if (enemyData != null) { return enemyData.maxHealth; }
-            Debug.LogError("EnemyData atanmadığı için can 1 olarak ayarlandı!", this);
-            return 1;
+            return (enemyData != null) ? enemyData.deathEffectPrefab : null;
         }
         
-        #endregion
+        // 'GetMaxHealthFromData' SİLİNDİ, çünkü 'InitializeFromData'
+        // metodu artık 'HealthSystem'de bu işi yapıyor.
+        // --- DEĞİŞİKLİK SONU ---
     }
 }

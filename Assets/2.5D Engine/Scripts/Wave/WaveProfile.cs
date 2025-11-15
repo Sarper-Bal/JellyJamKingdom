@@ -1,50 +1,45 @@
 /*
- * WAVE PROFILE (VERİ KATMANI) - v1.2
+ * WAVE PROFILE (VERİ KATMANI) - v2.0 (Data-Driven Refactor)
  * * DEĞİŞİKLİKLER:
- * - 'SpawnEvent' sınıfına 'pathID' (int) alanı eklendi.
- * - Bu sayede her spawn olayı için, 'spawnPointID'ye ek olarak,
- * (opsiyonel) bir 'pathID' de belirleyebiliriz.
- * - Bu, WaveManager'ın hangi spawn'ın hangi yolu izleyeceğini
- * bilmesini sağlar ve "TypeMismatch" hatasını çözer.
+ * - 'SpawnEvent' sınıfındaki 'public GameObject enemyPrefab' alanı,
+ * 'public EnemyData enemyDataToSpawn' alanı ile DEĞİŞTİRİLDİ.
+ * - Bu, artık dalga planlarken prefab değil, 'EnemyData' (stat)
+ * asset'i seçmemizi sağlar.
  */
 
 using UnityEngine;
 using System.Collections.Generic; 
 
-/// <summary>
-/// Bir dalga içindeki tek bir spawn olayını tanımlar.
-/// </summary>
 [System.Serializable]
 public class SpawnEvent
 {
-    [Tooltip("Bu olayda hangi düşman prefab'ının spawn olacağı.")]
-    public GameObject enemyPrefab; 
+    // --- DEĞİŞİKLİK BAŞLANGICI ---
+    // 'enemyPrefab' alanını 'EnemyData' ile değiştirdik.
+    [Tooltip("Bu olayda hangi düşman VERİSİNİN (statlarının) spawn olacağı.")]
+    public EnemyData enemyDataToSpawn; // <-- BU DEĞİŞTİ
+    // public GameObject enemyPrefab; // <-- BU SİLİNDİ
+    // --- DEĞİŞİKLİK SONU ---
 
     [Tooltip("Bu olayın hangi Spawn Point ID'sinde gerçekleşeceği.")]
     public int spawnPointID;
+    
+    [Tooltip("EĞER düşman 'FollowPath' modundaysa, takip edeceği 'EnemyPath' objesinin ID'si.")]
+    public int pathID = -1; 
 
-    // --- YENİ EKLENEN KISIM (v1.2) ---
-    [Tooltip("EĞER düşman 'FollowPath' modundaysa, takip edeceği 'EnemyPath' objesinin ID'si. " +
-             "(-1 = Yol yok, 'ChasePlayer' gibi davran)")]
-    public int pathID = -1; // <-- BU ALAN EKLENDİ
-    // --- DEĞİŞİKLİK SONU ---
-
-    [Tooltip("Bu olayın İLK defa tetikleneceği saniye (Round başından itibaren).")]
+    [Tooltip("Bu olayın İLK defa tetikleneceği saniye.")]
     public float triggerTime; 
 
     [Tooltip("Bu olay periyodik olarak tekrarlanacak mı?")]
     public bool isPeriodic; 
 
-    // v1.1 Değişiklikleri (Bunlar sizde zaten vardı)
     [Tooltip("EĞER periyodik ise, kaç saniyede bir tekrarlanacağı.")]
     public float repeatInterval = 1f; 
 
-    [Tooltip("EĞER periyodik ise, bu seçenek spawn'ın 'endTime'da durmasını sağlar.")]
+    [Tooltip("EĞER periyodik ise, spawn'ın 'endTime'da durmasını sağlar.")]
     public bool hasFiniteDuration;
 
-    [Tooltip("EĞER 'hasFiniteDuration' true ise, bu olayın periyodik spawn'ı bu saniyede durur.")]
+    [Tooltip("EĞER 'hasFiniteDuration' true ise, spawn bu saniyede durur.")]
     public float endTime;
-    // ---
 
     [Tooltip("Bu olayda (her tetiklendiğinde) toplam kaç düşman spawn edileceği.")]
     public int count = 1;
@@ -60,11 +55,8 @@ public class SpawnEvent
 public class WaveProfile : ScriptableObject
 {
     [Header("Round Settings")]
-    [Tooltip("Bu dalganın (turun) toplam süresi (saniye cinsinden).")]
     [Min(1)] 
     public float roundDuration = 60f;
-
-    [Tooltip("Tur bittikten sonra (kazanma) 'Victory Panel'in gösterilmesi için beklenecek süre (saniye).")]
     [Min(0)]
     public float victoryDelay = 3f;
     

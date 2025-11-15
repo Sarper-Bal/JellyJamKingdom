@@ -5538,6 +5538,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1be99b91fb3424c80b51dcc33b911d13, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  genericEnemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
   roundManager: {fileID: 1979538491}
   currentRoundProfile: {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
 --- !u!4 &990297988
