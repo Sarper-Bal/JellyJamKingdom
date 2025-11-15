@@ -21,7 +21,7 @@ MonoBehaviour:
   projectileSpeed: 10
   projectileRadius: 0.5
   attackSpeed: 0.5
-  attackRange: 5
+  attackRange: 7
   canFireWhileMoving: 0
   projectilesPerShot: 1
   burstFireDelay: 0.2

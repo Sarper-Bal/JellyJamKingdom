@@ -1,183 +1,79 @@
 /*
- * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - MODÜLER YAPI (v2.0)
+ * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.1)
  *
- * BU SCRİPT'İN YENİ GÖREVLERİ:
- * 1. HAREKET MODÜLERLİĞİ: Artık 'MovementType' enum'u sayesinde düşmanın nasıl
- * hareket edeceğini (Oyuncu Takibi, Yol Takibi, Sabit Yön) Inspector'dan
- * seçebiliyoruz.
- * 2. OPTİMİZASYON (HAVUZLAMA UYUMU):
- * - 'Start()' metodu, 'OnEnable()' olarak değiştirildi. Bu sayede düşman
- * ObjectPooler'dan her çağrıldığında (spawn olduğunda) hedef ataması
- * güvenilir bir şekilde YENİDEN yapılır.
- * - 'Invoke' kaldırıldı, hedef ataması (gerekiyorsa) anında yapılıyor.
- * - 'OnDisable()' eklendi. Düşman havuza geri döndüğünde (öldüğünde veya
- * deaktif olduğunda) mevcut hedefini ('target') ve yol takibi verisini
- * (currentWaypointIndex) sıfırlar. Bu, bir sonraki spawn için kritik
- * önemdedir.
- * 3. YÖNLENDİRİCİ (ROUTER) YAPI:
- * - 'Update()' metodu artık bir 'switch' bloğu kullanarak bir yönlendirici
- * görevi görüyor ve seçili olan 'movementType'a göre ilgili
- * 'Handle...Movement()' fonksiyonunu çağırıyor. Bu, kodun temiz,
- * okunabilir ve genişletilebilir (modüler) olmasını sağlar.
- * 4. YENİ HAREKET METOTLARI:
- * - HandleChasePlayerMovement(): Sizin eski 'Update' metodunuzdaki mantığı
- * içerir.
- * - HandleFollowPathMovement(): Inspector'dan atanan 'waypoints' dizisini
- * takip eder.
- * - HandleFixedDirectionMovement(): Inspector'dan atanan 'fixedDirection'
- * yönünde sabit olarak ilerler.
- *
- * NOT: Bu güncelleme, sizin "şimdilik stat sistemini (PlayerStats)
- * entegre etmeyelim" talebinize uymuştur. Mevcut 'speed' ve 'damageAmount'
- * değişkenleri korunmuştur.
+ * * DEĞİŞİKLİKLER (v3.1 - Yol Takibi Düzeltmesi):
+ * - 'HandleFollowPathMovement()' metodu güncellendi.
+ * - Artık 'targetWaypoint.position'ı doğrudan hedef almıyor.
+ * - 'targetPositionOnGround' adında geçici bir Vector3 oluşturuluyor.
+ * - Bu yeni vektör, waypoint'in X ve Z'sini, ancak düşmanın KENDİ Y
+ * pozisyonunu alır (transform.position.y).
+ * - 'MoveTowards' ve 'Distance' hesaplamaları artık bu 'targetPositionOnGround'
+ * vektörünü kullanır.
+ * - BU DÜZELTME, düşmanın Y ekseninde (havada) olan waypoint'lere
+ * takılıp kalmasını engeller ve hareketi XZ düzlemine kilitler.
  */
 
 using UnityEngine;
 
 namespace IndianOceanAssets.Engine2_5D
 {
-    // Controls enemy behavior: follows player and handles collision.
+    [RequireComponent(typeof(HealthSystem))]
     public class EnemyAI : MonoBehaviour
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI (Modüler Hareket Sistemi) ---
+        [Header("Veri Kaynağı (ZORUNLU)")]
+        [Tooltip("Bu düşmanın tüm statlarını ve davranışlarını belirleyen " +
+                 "ScriptableObject verisi.")]
+        [SerializeField] private EnemyData enemyData;
 
-        /// <summary>
-        /// Düşmanın hangi hareket mantığını kullanacağını belirler.
-        /// Bu, Unity Inspector'ından bir dropdown menü olarak seçilebilir.
-        /// </summary>
-        public enum MovementType
-        {
-            /// <summary>
-            /// 'Player' etiketli hedefi aktif olarak arar ve takip eder.
-            /// (Sizin mevcut sisteminiz)
-            /// </summary>
-            ChasePlayer,
-            
-            /// <summary>
-            /// Inspector'dan atanan 'waypoints' dizisini sırayla takip eder.
-            /// (Kule savunma oyunlarındaki gibi)
-            /// </summary>
-            FollowPath,
-            
-            /// <summary>
-            /// 'fixedDirection' değişkeninde belirtilen sabit yöne doğru ilerler.
-            /// (Flappy Bird'deki borular veya bir mermi gibi)
-            /// </summary>
-            FixedDirection
-        }
-
-        [Header("Hareket Ayarları")]
-        [Tooltip("Bu düşmanın kullanacağı yapay zeka hareket tipi.")]
-        [SerializeField] private MovementType movementType = MovementType.ChasePlayer;
-
-        [Tooltip("Düşmanın hareket hızı. (Tüm modlar tarafından kullanılır)")]
-        [SerializeField] private float speed;
-        
-        [Header("Yol Takibi Ayarları (FollowPath)")]
-        [Tooltip("EĞER 'Movement Type = FollowPath' ise, düşmanın takip edeceği " +
-                 "Transform (boş obje) noktalarının sıralı listesi.")]
-        [SerializeField] private Transform[] waypoints;
-        
-        [Tooltip("Yolun sonuna gelindiğinde başa dönsün mü?")]
-        [SerializeField] private bool loopPath = true;
-        
-        // Takip edilen mevcut yol noktasının indeksi
-        private int currentWaypointIndex = 0;
-        
-        [Header("Sabit Yön Ayarları (FixedDirection)")]
-        [Tooltip("EĞER 'Movement Type = FixedDirection' ise, düşmanın " +
-                 "ilerleyeceği yön. (Normalize edilmesine gerek yok, kod içinde yapılır)")]
-        [SerializeField] private Vector3 fixedDirection = new Vector3(0, 0, -1); // Varsayılan: Z'de aşağı
-        
-        // --- DEĞİŞİKLİK SONU ---
-
-        
-        [Header("Genel Ayarlar")]
-        [Tooltip("Oyuncuya çarptığında vereceği hasar miktarı.")]
-        [SerializeField] private int damageAmount;
-        
+        [Header("Bileşen Referansları")]
         [Tooltip("Yön değiştirdiğinde dönecek olan Sprite Renderer.")]
         [SerializeField] private SpriteRenderer spriteRenderer;
 
-        // Düşmanın o an takip ettiği hedef (Player veya Waypoint olabilir)
-        private Transform target; 
+        // --- Motorun Anlık (Runtime) Verileri ---
+        private Transform chaseTarget;          // 'ChasePlayer' modu için hedef (Oyuncu)
+        private Transform[] currentPathWaypoints; // 'FollowPath' modu için hedef yol
+        private int currentWaypointIndex = 0;   // Yolda kaçıncı noktada olduğu
         
-        
-        // --- DEĞİŞİKLİK BAŞLANGICI (Optimize Edilmiş Başlatma) ---
+        private void Awake()
+        {
+            if (enemyData == null)
+            {
+                Debug.LogError($"'{gameObject.name}' üzerinde 'EnemyData' asset'i atanmamış! " +
+                               "EnemyAI çalışmayacak.", this);
+                this.enabled = false; 
+            }
+        }
         
         /// <summary>
-        /// 'Start()' yerine 'OnEnable()' kullanıyoruz.
-        /// Bu metot, obje her 'SetActive(true)' yapıldığında (yani ObjectPooler
-        /// tarafından her spawn edildiğinde) çalışır. Bu, havuzlama için
-        /// kritik bir düzeltmedir.
+        /// YENİ METOT: Bu düşmanın motorunu başlatır.
+        /// 'WaveManager' tarafından spawn edildikten hemen sonra çağrılır.
         /// </summary>
-        private void OnEnable()
+        public void Initialize(Transform targetToChase, Transform[] path)
         {
-            // Eğer hareket tipimiz 'ChasePlayer' olarak ayarlandıysa,
-            // hedefimizi (Player'ı) bulmayı dene.
-            if (movementType == MovementType.ChasePlayer)
+            this.chaseTarget = targetToChase;
+            this.currentPathWaypoints = path;
+            this.currentWaypointIndex = 0; // Her spawn'da sıfırla
+            
+            if (enemyData.movementType == MovementType.ChasePlayer && this.chaseTarget == null)
             {
-                // 'Invoke' kaldırıldı. Artık 1 saniye beklemiyoruz.
-                AssignPlayer();
+                Debug.LogWarning("EnemyAI: 'ChasePlayer' modunda ancak 'targetToChase' (Player) null geldi.", this);
             }
-            // Diğer modlar (FollowPath, FixedDirection) hedef olarak
-            // 'Player'ı aramadığı için 'AssignPlayer'ı boşuna çağırmayız.
-            // Bu da bir optimizasyondur.
-        }
-
-        /// <summary>
-        /// Bu metot, obje 'SetActive(false)' yapıldığında (yani havuza
-        /// geri döndüğünde) çalışır.
-        /// </summary>
-        private void OnDisable()
-        {
-            // Düşman havuza geri dönerken, bir sonraki kullanım için
-            // geçici verilerini sıfırlamalıyız.
-            target = null;
-            currentWaypointIndex = 0;
-        }
-
-        // 'Start()' metodu 'OnEnable()' olarak değiştirildi.
-        /*
-        public void Start()
-        {
-            Invoke("AssignPlayer", 1f); // ESKİ KOD
-        }
-        */
-
-        // 'AssignPlayer' metodu korundu ancak artık 'Invoke' ile çağrılmıyor.
-        public void AssignPlayer()
-        {
-            // Bu fonksiyon yavaştır, ancak 'OnEnable'da sadece 1 KEZ
-            // çağrıldığı için 'Update' içinde çağırmaktan çok daha performanslıdır.
-            GameObject player = GameObject.FindGameObjectWithTag("Player");
-            if (player != null)
+            
+            if (enemyData.movementType == MovementType.FollowPath && (this.currentPathWaypoints == null || this.currentPathWaypoints.Length == 0))
             {
-                target = player.transform;
-            }
-            else
-            {
-                // Oyuncu bulunamadıysa (test sahnesi vb.), hata vermemesi için
-                // 'Update' döngüsünü durdur.
-                Debug.LogWarning("EnemyAI: 'Player' etiketli hedef bulunamadı. " +
-                                 "'ChasePlayer' modu çalışmayacak.");
+                Debug.LogWarning("EnemyAI: 'FollowPath' modunda ancak 'path' (Waypoints) boş veya null geldi. " +
+                                 "Düşman hareket etmeyecek.", this);
             }
         }
         
-        // --- DEĞİŞİKLİK SONU ---
-
-
-        // --- DEĞİŞİKLİK BAŞLANGICI (Modüler Update Yönlendiricisi) ---
-        
         /// <summary>
-        /// 'Update' artık bir yönlendirici (router) görevi görüyor.
-        /// İçinde hareket hesaplaması yapmaz, sadece seçilen moda göre
-        /// ilgili 'Handle...Movement()' fonksiyonunu çağırır.
+        /// 'Update' artık 'enemyData'dan okunan veriye göre bir yönlendiricidir.
         /// </summary>
         public void Update()
         {
-            // Hangi hareket tipi seçiliyse o fonksiyona git
-            switch (movementType)
+            if (enemyData == null) return;
+            
+            switch (enemyData.movementType)
             {
                 case MovementType.ChasePlayer:
                     HandleChasePlayerMovement();
@@ -194,116 +90,122 @@ namespace IndianOceanAssets.Engine2_5D
         }
 
         /// <summary>
-        /// MOD 1: Oyuncuyu Takip Etme Hareketi
-        /// (Sizin eski 'Update' kodunuz buraya taşındı)
+        /// MOD 1: Oyuncuyu Takip Etme
         /// </summary>
         private void HandleChasePlayerMovement()
         {
-            // 'OnEnable/AssignPlayer' içinde hedef atandıysa
-            if (target) 
+            if (chaseTarget)
             {
-                // Sprite'ı hedefin X pozisyonuna göre çevir
-                if (target.position.x > transform.position.x)
+                if (chaseTarget.position.x > transform.position.x)
                     spriteRenderer.flipX = false;
                 else
                     spriteRenderer.flipX = true;
 
-                // Hedefe doğru 'speed' hızıyla hareket et
-                transform.position = Vector3.MoveTowards(transform.position, target.position, Time.deltaTime * speed);
+                transform.position = Vector3.MoveTowards(
+                    transform.position, 
+                    chaseTarget.position, 
+                    Time.deltaTime * enemyData.speed
+                );
             }
-            // 'target' yoksa (örn: AssignPlayer başarısız olduysa)
-            // hiçbir şey yapma, bekle.
         }
 
         /// <summary>
-        /// MOD 2: Yolu Takip Etme Hareketi (Yeni)
+        /// MOD 2: Yolu Takip Etme (v3.1 Y-Ekseni Düzeltmesi ile)
         /// </summary>
         private void HandleFollowPathMovement()
         {
-            // Waypoint listesi atanmamışsa veya boşsa, hata vermemesi
-            // için hiçbir şey yapma.
-            if (waypoints == null || waypoints.Length == 0)
+            if (currentPathWaypoints == null || currentPathWaypoints.Length == 0)
             {
-                // (Bu uyarıyı OnEnable'da vermek daha performanslıdır ama
-                // basitlik için burada tutabiliriz)
-                // Debug.LogWarning("MovementType 'FollowPath' seçili ancak 'waypoints' dizisi boş!");
-                return;
+                return; // Takip edilecek yol yoksa dur.
             }
             
             // 1. Hedef waypoint'i belirle
-            // 'currentWaypointIndex'in dizi sınırları içinde olduğundan emin ol
-            if (currentWaypointIndex >= waypoints.Length)
+            if (currentWaypointIndex >= currentPathWaypoints.Length)
             {
-                // Yolun sonuna gelmişiz demektir
-                if (loopPath)
+                if (enemyData.loopPath)
                 {
-                    // Döngüye izin verildiyse, başa dön
-                    currentWaypointIndex = 0;
+                    currentWaypointIndex = 0; // Başa dön
                 }
                 else
                 {
-                    // Döngü yoksa, hareketi durdur (fonksiyondan çık)
-                    // Düşman son noktada bekleyecektir.
-                    return; 
+                    return; // Yol bittiyse dur
                 }
             }
             
-            Transform targetWaypoint = waypoints[currentWaypointIndex];
-            if (targetWaypoint == null) return; // Güvenlik (Nokta silinmişse)
+            Transform targetWaypoint = currentPathWaypoints[currentWaypointIndex];
+            if (targetWaypoint == null) return;
             
-            // 2. Sprite yönünü ayarla
-            if (targetWaypoint.position.x > transform.position.x)
+            // --- DEĞİŞİKLİK BAŞLANGICI (v3.1 - Y Ekseni Düzeltmesi) ---
+            
+            // 2. Hedef pozisyonu al, ANCAK Y eksenini (yüksekliği)
+            //    düşmanın kendi Y ekseni olarak ayarla.
+            //    Bu, düşmanın havada bir noktaya ulaşmaya çalışmasını engeller.
+            Vector3 targetPositionOnGround = new Vector3(
+                targetWaypoint.position.x, 
+                transform.position.y, // Düşmanın kendi Y yüksekliğini kullan
+                targetWaypoint.position.z
+            );
+
+            // 3. Sprite yönünü bu XZ hedefli pozisyona göre ayarla
+            if (targetPositionOnGround.x > transform.position.x)
                 spriteRenderer.flipX = false;
             else
                 spriteRenderer.flipX = true;
             
-            // 3. Hedef waypoint'e doğru hareket et
-            transform.position = Vector3.MoveTowards(transform.position, targetWaypoint.position, Time.deltaTime * speed);
+            // 4. Yerdeki hedef pozisyona doğru hareket et
+            transform.position = Vector3.MoveTowards(
+                transform.position, 
+                targetPositionOnGround, // Düzeltilmiş hedefi kullan
+                Time.deltaTime * enemyData.speed
+            );
 
-            // 4. Hedefe ulaşıp ulaşmadığımızı kontrol et
-            // (Küçük bir eşik değer (0.1f) kullanmak, tam 0'ı beklemekten daha güvenlidir)
-            if (Vector3.Distance(transform.position, targetWaypoint.position) < 0.1f)
+            // 5. Hedefe ulaşıp ulaşmadığımızı KONTROL EDERKEN de
+            //    Y eksenini görmezden gelmeliyiz. (Mesafe artık 0.1f'in altına inebilir)
+            if (Vector3.Distance(transform.position, targetPositionOnGround) < 0.1f)
             {
-                // Hedefe ulaştıysak, bir sonraki hedefe geç
-                currentWaypointIndex++;
+                currentWaypointIndex++; // Bir sonraki noktaya geç
             }
+            // --- DEĞİŞİKLİK SONU ---
         }
 
         /// <summary>
-        /// MOD 3: Sabit Yönde İlerleme Hareketi (Yeni)
+        /// MOD 3: Sabit Yönde İlerleme
         /// </summary>
         private void HandleFixedDirectionMovement()
         {
-            // Sprite'ı sabit yönün X eksenine göre ayarla
-            // (Eğer X yönü 0 ise, mevcut 'flipX' durumunu koru)
-            if (fixedDirection.x > 0.01f)
+            if (enemyData.fixedDirection.x > 0.01f)
                 spriteRenderer.flipX = false;
-            else if (fixedDirection.x < -0.01f)
+            else if (enemyData.fixedDirection.x < -0.01f)
                 spriteRenderer.flipX = true;
             
-            // Belirlenen yönde 'speed' hızıyla durmadan ilerle
-            // '.normalized' kullanmak, Inspector'dan (1,0,0) veya (100,0,0)
-            // girilse bile hızın 'speed' ile aynı kalmasını sağlar.
-            transform.position += fixedDirection.normalized * speed * Time.deltaTime;
+            transform.position += enemyData.fixedDirection.normalized * enemyData.speed * Time.deltaTime;
         }
         
-        // --- DEĞİŞİKLİK SONU ---
-
-
         /// <summary>
-        /// Çarpışma mantığı (Bu kısım değişmedi).
-        /// Bu mantık, hangi hareket modu seçilirse seçilsin çalışmaya
-        /// devam eder, bu da sistemi modüler yapar.
+        /// Çarpışma mantığı - Hasarı 'enemyData'dan alıyor
         /// </summary>
         void OnCollisionEnter(Collision collision)
         {
+            if (enemyData == null) return; 
+            
             if (collision.collider.CompareTag("Player"))
             {
-                // Oyuncuya hasar ver
-                collision.collider.GetComponent<HealthSystem>().Damage(damageAmount);
-                // Kendini yok et (Aslında havuzuna geri dön [Bkz: HealthSystem.cs])
+                collision.collider.GetComponent<HealthSystem>().Damage(enemyData.damageAmount);
                 GetComponent<HealthSystem>().Die();
             }
+        }
+        
+        /// <summary>
+        /// 'HealthSystem'in can verisini alması için.
+        /// </summary>
+        public int GetMaxHealthFromData()
+        {
+            if (enemyData != null)
+            {
+                return enemyData.maxHealth;
+            }
+            Debug.LogError("EnemyData atanmadığı için can 1 olarak ayarlandı!", this);
+            return 1;
         }
     }
 }

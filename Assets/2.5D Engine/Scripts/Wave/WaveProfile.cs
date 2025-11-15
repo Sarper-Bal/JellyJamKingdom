@@ -1,16 +1,18 @@
+/*
+ * WAVE PROFILE (VERİ KATMANI) - v1.2
+ * * DEĞİŞİKLİKLER:
+ * - 'SpawnEvent' sınıfına 'pathID' (int) alanı eklendi.
+ * - Bu sayede her spawn olayı için, 'spawnPointID'ye ek olarak,
+ * (opsiyonel) bir 'pathID' de belirleyebiliriz.
+ * - Bu, WaveManager'ın hangi spawn'ın hangi yolu izleyeceğini
+ * bilmesini sağlar ve "TypeMismatch" hatasını çözer.
+ */
+
 using UnityEngine;
 using System.Collections.Generic; 
 
-/*
- * WAVE PROFILE (VERİ KATMANI)
- * * DEĞİŞİKLİKLER (v1.1 - Sınırlı Süre):
- * - 'SpawnEvent' sınıfına 'hasFiniteDuration' (bool) ve 'endTime' (float) eklendi.
- * - Bu, periyodik olayların tur sonundan önce bitmesini sağlayacak.
- */
-
 /// <summary>
 /// Bir dalga içindeki tek bir spawn olayını tanımlar.
-/// [System.Serializable] sayesinde bu sınıfın değişkenlerini Unity Inspector'da görebileceğiz.
 /// </summary>
 [System.Serializable]
 public class SpawnEvent
@@ -21,29 +23,31 @@ public class SpawnEvent
     [Tooltip("Bu olayın hangi Spawn Point ID'sinde gerçekleşeceği.")]
     public int spawnPointID;
 
+    // --- YENİ EKLENEN KISIM (v1.2) ---
+    [Tooltip("EĞER düşman 'FollowPath' modundaysa, takip edeceği 'EnemyPath' objesinin ID'si. " +
+             "(-1 = Yol yok, 'ChasePlayer' gibi davran)")]
+    public int pathID = -1; // <-- BU ALAN EKLENDİ
+    // --- DEĞİŞİKLİK SONU ---
+
     [Tooltip("Bu olayın İLK defa tetikleneceği saniye (Round başından itibaren).")]
     public float triggerTime; 
 
-    [Tooltip("Bu olay periyodik olarak tekrarlanacak mı? (İşaretlenmezse, 'triggerTime'da sadece 1 kez çalışır).")]
+    [Tooltip("Bu olay periyodik olarak tekrarlanacak mı?")]
     public bool isPeriodic; 
 
-    // --- DEĞİŞİKLİK BAŞLANGICI ---
-    // Bu alanlar artık 'SpawnEventDrawer.cs' (Editor script'i) tarafından
-    // 'isPeriodic' true ise gösterilecek.
-
+    // v1.1 Değişiklikleri (Bunlar sizde zaten vardı)
     [Tooltip("EĞER periyodik ise, kaç saniyede bir tekrarlanacağı.")]
-    public float repeatInterval = 1f; // (Varsayılan değer 0 olmamalı, 1f olarak güncellendi)
+    public float repeatInterval = 1f; 
 
-    [Tooltip("EĞER periyodik ise, bu seçenek spawn'ın 'endTime'da durmasını sağlar. " +
-             "İşaretlenmezse, tur sonuna kadar devam eder.")]
+    [Tooltip("EĞER periyodik ise, bu seçenek spawn'ın 'endTime'da durmasını sağlar.")]
     public bool hasFiniteDuration;
 
     [Tooltip("EĞER 'hasFiniteDuration' true ise, bu olayın periyodik spawn'ı bu saniyede durur.")]
     public float endTime;
-    // --- DEĞİŞİKLİK SONU ---
+    // ---
 
     [Tooltip("Bu olayda (her tetiklendiğinde) toplam kaç düşman spawn edileceği.")]
-    public int count = 1; // (Varsayılan değer 0 olmamalı, 1 olarak güncellendi)
+    public int count = 1;
 
     [Tooltip("Her bir düşmanın spawn olması arasında geçecek saniye.")]
     public float spawnInterval;

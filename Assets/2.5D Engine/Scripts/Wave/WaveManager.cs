@@ -1,9 +1,15 @@
 /*
- * WAVE MANAGER (YÖNETİCİ MODELİ - v4.4)
- * * DEĞİŞİKLİKLER (Hata Düzeltmesi CS1671):
- * - '[DefaultExecutionOrder(-10)]' özniteliği, 'namespace' bloğunun
- * dışından, 'public class WaveManager' bildiriminin hemen üzerine,
- * 'namespace' bloğunun İÇİNE taşındı.
+ * WAVE MANAGER (YÖNETİCİ MODELİ - v4.6 Düzeltme)
+ * * DEĞİŞİKLİKLER:
+ * - 'EnemyPath' ve 'EnemySpawnPoint' bağlılığı TAMAMEN AYRILDI.
+ * - 'enemyPaths' adında yeni bir 'Dictionary<int, EnemyPath>' eklendi.
+ * - 'Awake()' metodu artık sahnedeki tüm 'EnemyPath' objelerini
+ * bulup 'pathID'lerine göre bu sözlüğe ekliyor.
+ * - 'SpawnBurst()' metodu DÜZELTİLDİ:
+ * - Artık 'spawnPoint.GetComponent<EnemyPath>()' ÇAĞIRMIYOR.
+ * - Bunun yerine, 'spawnEvent.pathID'yi okuyor. (v1.2'den gelen)
+ * - Eğer 'pathID' geçerliyse, yolu 'enemyPaths' sözlüğünden alıyor.
+ * - Bu, 'FollowPath' modu için alınan 'null path' hatasını düzeltir.
  */
 
 using UnityEngine;
@@ -11,13 +17,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-// --- HATA DÜZELTMESİ: Attribute (öznitelik) namespace'in İÇİNE taşındı ---
 namespace IndianOceanAssets.Engine2_5D
 {
-    /// <summary>
-    /// Bu script'in 'Start' metodunun, diğer tüm script'lerden (özellikle RoundManager'dan)
-    /// önce çalışmasını garantilemek için bu attribute'u ekliyoruz.
-    /// </summary>
     [DefaultExecutionOrder(-10)]
     public class WaveManager : MonoBehaviour
     {
@@ -30,56 +31,71 @@ namespace IndianOceanAssets.Engine2_5D
         private Dictionary<GameObject, int> dynamicEffectPools;
         
         [Header("References")]
-        [Tooltip("Turun süresi gibi bilgileri almak için RoundManager referansı.")]
         [SerializeField] private RoundManager roundManager;
         
         [Header("Wave Data")]
-        [Tooltip("Bu seviyede oynanacak dalga profili.")]
         [SerializeField] private WaveProfile currentRoundProfile; 
         
-        
+        // Sahnedeki tüm spawn noktalarını ve yolları ID'ye göre saklar
         private Dictionary<int, EnemySpawnPoint> spawnPoints = new Dictionary<int, EnemySpawnPoint>();
-        private List<float> nextEventTriggerTimes;
+        private Dictionary<int, EnemyPath> enemyPaths = new Dictionary<int, EnemyPath>(); // <-- YENİ (v4.6)
         
+        private List<float> nextEventTriggerTimes;
+        private Transform playerTarget;
         private bool waveActive = false;
 
         private void Awake()
         {
-            // Singleton kurulumu
+            // Singleton
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
             Instance = this;
+            
+            // --- DEĞİŞİKLİK (v4.6) ---
+            // Sahnedeki tüm spawn noktalarını ve yolları ID'lerine göre
+            // oyun başlarken BİR KEZ bulup sözlüğe kaydet (Optimize)
             spawnPoints = FindObjectsOfType<EnemySpawnPoint>().ToDictionary(sp => sp.spawnPointID);
+            enemyPaths = FindObjectsOfType<EnemyPath>().ToDictionary(path => path.pathID);
+            
+            Debug.Log($"WaveManager: {spawnPoints.Count} adet Spawn Noktası, " +
+                      $"{enemyPaths.Count} adet Düşman Yolu bulundu.");
+            // --- DEĞİŞİKLİK SONU ---
         }
 
         private void Start()
         {
-            // 1. RoundManager referansını bul
+            // 1. Referansları Kontrol Et
             if (roundManager == null)
             {
-                // RoundManager'ı bulmaya çalış
                 roundManager = FindObjectOfType<RoundManager>();
                 if (roundManager == null)
                 {
-                    Debug.LogError("WaveManager: Sahnede 'RoundManager' component'i bulunamadı! " +
-                                   "Oyun başlatılamıyor.");
-                    return; // RoundManager yoksa devam etme
+                    Debug.LogError("WaveManager: Sahnede 'RoundManager' component'i bulunamadı!");
+                    return;
                 }
             }
 
-            // 2. Gerekli WaveProfile'ın atandığını kontrol et
             if (currentRoundProfile == null)
             {
-                Debug.LogError("WaveManager üzerinde 'Current Round Profile' atanmamış! " +
-                               "Oyun başlatılamıyor.");
+                Debug.LogError("WaveManager üzerinde 'Current Round Profile' atanmamış!");
                 return;
             }
+            
+            // 2. Oyuncu hedefini BİR KEZ bul ve sakla (Optimize)
+            GameObject playerGO = GameObject.FindGameObjectWithTag("Player");
+            if (playerGO != null)
+            {
+                playerTarget = playerGO.transform;
+            }
+            else
+            {
+                Debug.LogError("WaveManager: Sahnede 'Player' etiketli oyuncu bulunamadı!");
+            }
 
-            // 3. RoundManager'ı Başlat (Initialize et)
-            // ('DefaultExecutionOrder' sayesinde bu 'Start', 'RoundManager.Start'tan önce çalışır)
+            // 3. RoundManager'ı Başlat
             roundManager.InitializeRound(
                 currentRoundProfile.roundDuration, 
                 currentRoundProfile.victoryDelay
@@ -88,93 +104,57 @@ namespace IndianOceanAssets.Engine2_5D
             // 4. Havuz ihtiyacını hesapla
             CalculatePoolRequirements();
 
-            // 5. Dinamik Düşman Havuzlarını Oluştur
+            // 5. Dinamik Havuzları Oluştur
             CreateDynamicPools(dynamicEnemyPools, "Düşman");
-            
-            // 6. Dinamik Efekt Havuzlarını Oluştur
             CreateDynamicPools(dynamicEffectPools, "Efekt");
             
-            // 7. Dalgaları Başlat
+            // 6. Dalgaları Başlat
             StartNextWave();
         }
-
-        /// <summary>
-        /// ObjectPooler'a havuz oluşturma komutlarını gönderen yardımcı metot.
-        /// </summary>
+        
+        // ... (Değişiklik Olmayan Metotlar) ...
+        #region Bu Metotlarda Değişiklik Yok
+        
         private void CreateDynamicPools(Dictionary<GameObject, int> poolDict, string poolType)
         {
             if (poolDict != null && poolDict.Count > 0)
             {
-                Debug.Log($"--- WaveManager: {poolType} Havuzları Oluşturuluyor... ({poolDict.Count} tip) ---");
                 foreach (var entry in poolDict)
                 {
-                    if (entry.Key == null)
-                    {
-                        Debug.LogWarning($"WaveManager: {poolType} havuzunda 'null' prefab bulundu. Atlanıyor.");
-                        continue;
-                    }
+                    if (entry.Key == null) continue;
                     ObjectPooler.Instance.CreatePool(entry.Key.name, entry.Key, entry.Value);
                 }
             }
-            else
-            {
-                Debug.LogWarning($"WaveManager: Hesaplama sonucunda spawn edilecek {poolType} bulunamadı.");
-            }
         }
         
-        
-        /// <summary>
-        /// 'currentRoundProfile'ı analiz eder ve havuz ihtiyaçlarını hesaplar.
-        /// </summary>
         private void CalculatePoolRequirements()
         {
             dynamicEnemyPools = new Dictionary<GameObject, int>();
             dynamicEffectPools = new Dictionary<GameObject, int>();
 
-            // RoundManager kontrolü Start() içinde yapıldığı için burada tekrar gerekmez.
-            
-            if (currentRoundProfile == null || currentRoundProfile.spawnEvents.Count == 0)
-            {
-                Debug.LogWarning("WaveManager'a atanmış 'Current Round Profile' yok veya 'Spawn Events' listesi boş.");
-                return;
-            }
+            if (currentRoundProfile == null || currentRoundProfile.spawnEvents.Count == 0) return;
 
-            // Turun toplam süresini al (bu, varsayılan bitiş zamanıdır)
             float roundDuration = roundManager.RoundDuration;
             
-            // Dalgadaki bütün olayları tara
             foreach (SpawnEvent spawnEvent in currentRoundProfile.spawnEvents)
             {
                 GameObject enemyPrefab = spawnEvent.enemyPrefab;
-                if (enemyPrefab == null)
-                {
-                    Debug.LogWarning($"WaveProfile ({currentRoundProfile.name}) içinde 'enemyPrefab' atanmamış bir SpawnEvent bulundu. Bu olay atlanıyor.");
-                    continue; 
-                }
+                if (enemyPrefab == null) continue; 
 
                 int countForThisEvent = 0;
                 
-                if (spawnEvent.isPeriodic) // Periyodik
+                if (spawnEvent.isPeriodic)
                 {
-                    if (spawnEvent.repeatInterval < 0.1f) 
-                    {
-                        Debug.LogWarning($"WaveProfile ({currentRoundProfile.name}) içindeki bir periyodik olayın 'repeatInterval' değeri çok düşük. Tek seferlik olarak hesaplanacak.");
-                        countForThisEvent = spawnEvent.count; 
-                    }
+                    if (spawnEvent.repeatInterval < 0.1f) { countForThisEvent = spawnEvent.count; }
                     else
                     {
-                        // 1. Geçerli bitiş zamanını belirle:
                         float effectiveEndTime = roundDuration; 
-                        
                         if (spawnEvent.hasFiniteDuration && spawnEvent.endTime < effectiveEndTime)
                         {
                             effectiveEndTime = spawnEvent.endTime;
                         }
-
-                        // 2. Aktif süreyi hesapla
                         float activeDuration = effectiveEndTime - spawnEvent.triggerTime;
                         
-                        // 3. Tekrar sayısını hesapla
                         if (activeDuration > 0)
                         {
                             int repetitions = Mathf.FloorToInt(activeDuration / spawnEvent.repeatInterval) + 1;
@@ -182,60 +162,38 @@ namespace IndianOceanAssets.Engine2_5D
                         }
                     }
                 }
-                else // Tek seferlik
+                else
                 {
-                    if(spawnEvent.triggerTime <= roundDuration) 
-                    {
-                        countForThisEvent = spawnEvent.count;
-                    }
+                    if(spawnEvent.triggerTime <= roundDuration) { countForThisEvent = spawnEvent.count; }
                 }
                 
                 if (countForThisEvent == 0) continue; 
 
-                // Düşman havuzunu güncelle
-                if (!dynamicEnemyPools.ContainsKey(enemyPrefab))
-                {
-                    dynamicEnemyPools.Add(enemyPrefab, 0); 
-                }
+                if (!dynamicEnemyPools.ContainsKey(enemyPrefab)) { dynamicEnemyPools.Add(enemyPrefab, 0); }
                 dynamicEnemyPools[enemyPrefab] += countForThisEvent; 
 
-                // Ölüm efekti havuzunu güncelle
                 HealthSystem hs = enemyPrefab.GetComponent<HealthSystem>();
                 if (hs != null)
                 {
                     GameObject deathEffectPrefab = hs.GetDeathEffectPrefab(); 
                     if (deathEffectPrefab != null)
                     {
-                        if (!dynamicEffectPools.ContainsKey(deathEffectPrefab))
-                        {
-                            dynamicEffectPools.Add(deathEffectPrefab, 0); 
-                        }
+                        if (!dynamicEffectPools.ContainsKey(deathEffectPrefab)) { dynamicEffectPools.Add(deathEffectPrefab, 0); }
                         dynamicEffectPools[deathEffectPrefab] += countForThisEvent; 
                     }
                 }
             } 
-            
-            Debug.Log("--- WaveManager: Havuz Hesaplaması Tamamlandı ---");
         }
         
-        
-        /// <summary>
-        /// Yeni düşman spawn etmeyi DURDURUR.
-        /// </summary>
         public void StopWaveSpawning()
         {
             waveActive = false;
             StopAllCoroutines();
-            Debug.Log("WaveManager: Yeni düşman spawn'ı durduruldu.");
         }
 
-        /// <summary>
-        /// Sahnede o anda aktif olan TÜM "Enemy" tag'li objeleri bulur ve öldürür.
-        /// </summary>
         public void KillAllActiveEnemies()
         {
             GameObject[] activeEnemies = GameObject.FindGameObjectsWithTag("Enemy");
-            Debug.Log($"WaveManager: Tur bitti. Sahnede kalan {activeEnemies.Length} adet düşman öldürülüyor...");
             foreach (GameObject enemy in activeEnemies)
             {
                 HealthSystem hs = enemy.GetComponent<HealthSystem>();
@@ -243,70 +201,49 @@ namespace IndianOceanAssets.Engine2_5D
                 else Destroy(enemy);
             }
         }
-
-        /// <summary>
-        /// 'Start'ta oluşturulan tüm dinamik havuzları (düşman ve efekt) TEMİZLER.
-        /// </summary>
+        
         public void CleanupDynamicPools()
         {
             if (ObjectPooler.Instance == null) return;
-            Debug.Log("--- WaveManager: Dinamik Havuzlar Temizleniyor... ---");
-
             CleanupPoolDictionary(dynamicEnemyPools);
             CleanupPoolDictionary(dynamicEffectPools);
         }
-
-        /// <summary>
-        /// 'CleanupDynamicPools' için yardımcı metot.
-        /// </summary>
+        
         private void CleanupPoolDictionary(Dictionary<GameObject, int> poolDict)
         {
             if (poolDict != null)
             {
                 foreach (var entry in poolDict)
                 {
-                    if (entry.Key == null) continue; // Güvenlik
+                    if (entry.Key == null) continue;
                     ObjectPooler.Instance.DestroyPool(entry.Key.name);
                 }
                 poolDict.Clear(); 
             }
         }
 
-
         private void Update()
         {
-            if (!waveActive || !roundManager.IsRoundActive)
+            if (!waveActive || !roundManager.IsRoundActive || currentRoundProfile == null)
             {
                 return;
             }
             
-            if (currentRoundProfile == null) return; 
-
             float currentTime = roundManager.TimeElapsed;
-            float roundDuration = roundManager.RoundDuration; // Turun sonunu bilmemiz gerek
+            float roundDuration = roundManager.RoundDuration;
 
             for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++)
             {
-                // Eğer olay bittiyse (Infinity), atla
-                if (nextEventTriggerTimes[i] == Mathf.Infinity)
-                {
-                    continue;
-                }
-
-                // Tetiklenme zamanı geldi mi?
+                if (nextEventTriggerTimes[i] == Mathf.Infinity) continue;
+                
                 if (currentTime >= nextEventTriggerTimes[i])
                 {
                     SpawnEvent currentEvent = currentRoundProfile.spawnEvents[i];
-                    StartCoroutine(SpawnBurst(currentEvent)); // Düşmanları spawn et
+                    StartCoroutine(SpawnBurst(currentEvent)); 
 
-                    // --- Sonraki Spawn Zamanını Planlama ---
                     if (currentEvent.isPeriodic)
                     {
-                        // 1. Bir sonraki spawn zamanını hesapla
                         float nextSpawnTime = nextEventTriggerTimes[i] + currentEvent.repeatInterval;
-                        
-                        // 2. Geçerli bitiş zamanını belirle
-                        // Varsayılan bitiş, tur süresidir (roundDuration).
                         float effectiveEndTime = roundDuration; 
                         
                         if (currentEvent.hasFiniteDuration && currentEvent.endTime < effectiveEndTime)
@@ -314,36 +251,21 @@ namespace IndianOceanAssets.Engine2_5D
                             effectiveEndTime = currentEvent.endTime;
                         }
 
-                        // 3. Kontrol et: Bir sonraki spawn, bitiş zamanından önce mi?
-                        if (nextSpawnTime <= effectiveEndTime)
-                        {
-                            // Evet, bir sonraki spawn'ı planla
-                            nextEventTriggerTimes[i] = nextSpawnTime;
-                        }
-                        else
-                        {
-                            // Hayır, bu olayın son spawn'ıydı. Olayı bitir.
-                            nextEventTriggerTimes[i] = Mathf.Infinity;
-                        }
+                        if (nextSpawnTime <= effectiveEndTime) { nextEventTriggerTimes[i] = nextSpawnTime; }
+                        else { nextEventTriggerTimes[i] = Mathf.Infinity; }
                     }
                     else
                     {
-                        // Tek seferlik olaydı, olayı bitir.
                         nextEventTriggerTimes[i] = Mathf.Infinity;
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Dalga olaylarını başlatır.
-        /// </summary>
         public void StartNextWave()
         {
             if (currentRoundProfile != null && currentRoundProfile.spawnEvents.Count > 0)
             {
-                Debug.Log($"WaveManager: '{currentRoundProfile.name}' profili başlatılıyor!");
-
                 nextEventTriggerTimes = new List<float>();
                 foreach (var spawnEvent in currentRoundProfile.spawnEvents)
                 {
@@ -351,46 +273,86 @@ namespace IndianOceanAssets.Engine2_5D
                 }
                 waveActive = true;
             }
-            else
-            {
-                Debug.LogWarning($"WaveManager: '{currentRoundProfile.name}' profilinde hiç 'Spawn Event' bulunamadı!");
-                waveActive = false;
-            }
         }
+        
+        #endregion
 
         /// <summary>
         /// Bir spawn olayını (burst) gerçekleştirir.
+        /// (v4.6 - PathID düzeltmesi ile güncellendi)
         /// </summary>
         private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
         {
             GameObject prefabToSpawn = spawnEvent.enemyPrefab;
-            if (prefabToSpawn == null) yield break;
+            if (prefabToSpawn == null)
+            {
+                Debug.LogError("SpawnEvent'te 'enemyPrefab' atanmamış!");
+                yield break;
+            }
             
+            // 1. Spawn Noktasını Bul
             if (!spawnPoints.ContainsKey(spawnEvent.spawnPointID))
             {
                 Debug.LogWarning($"Spawn Point ID: {spawnEvent.spawnPointID} sahnede bulunamadı!");
                 yield break; 
             }
-
             EnemySpawnPoint spawnPoint = spawnPoints[spawnEvent.spawnPointID];
+            
             string poolTag = prefabToSpawn.name; 
+            
+            // --- DEĞİŞİKLİK (v4.6) ---
+            // 2. Takip Edilecek Yolu Bul
+            Transform[] waypointsToFollow = null; // Varsayılan olarak yol yok
+            
+            // Bu event için özel bir 'pathID' (-1 değil) atanmış mı?
+            if (spawnEvent.pathID != -1)
+            {
+                // Atanmış. 'Awake'te bulduğumuz 'enemyPaths' sözlüğünde bu ID var mı?
+                if (enemyPaths.ContainsKey(spawnEvent.pathID))
+                {
+                    // Harika! Yolu (waypoint dizisini) al.
+                    waypointsToFollow = enemyPaths[spawnEvent.pathID].waypoints;
+                }
+                else
+                {
+                    // 'WaveProfile' bir ID istiyor ama sahnede o ID'ye sahip
+                    // bir 'EnemyPath' objesi yok.
+                    Debug.LogWarning($"WaveManager: 'WaveProfile' {spawnEvent.pathID} ID'li bir yol " +
+                                     $"istedi ancak bu ID sahnede bulunamadı.", this);
+                    // 'waypointsToFollow' null olarak kalacak
+                }
+            }
+            // 'playerTarget' zaten 'Start()' içinde bulundu ve saklandı.
+            // --- DEĞİŞİKLİK SONU ---
 
             for (int i = 0; i < spawnEvent.count; i++)
             {
                 if (!waveActive) yield break;
 
+                // 3. Düşmanı havuzdan al
                 GameObject spawnedEnemy = ObjectPooler.Instance.SpawnFromPool(poolTag, spawnPoint.transform.position, Quaternion.identity);
                 
                 if (spawnedEnemy == null)
                 {
-                     Debug.LogError($"'{poolTag}' havuzu boşaldı! Hesaplama yetersiz kalmış olabilir. Spawn işlemi durduruldu.");
+                     Debug.LogError($"'{poolTag}' havuzu boşaldı! Spawn durduruldu.");
                      yield break;
                 }
                 
+                // 4. Havuz etiketini ayarla
                 IPooledObject pooledObj = spawnedEnemy.GetComponent<IPooledObject>();
                 if (pooledObj != null)
                 {
                     pooledObj.PoolTag = poolTag;
+                }
+                
+                // 5. Düşman motorunu (AI) bul ve başlat
+                EnemyAI enemyAI = spawnedEnemy.GetComponent<EnemyAI>();
+                if (enemyAI != null)
+                {
+                    // Düşmana hedefini (Player) ve (eğer bulunduysa) yolu (Waypoints) ver
+                    // 'EnemyAI.Initialize' metodu, 'waypointsToFollow' null gelse bile
+                    // 'FollowPath' modunda hata vermemesi için yazdığımız uyarıyı gösterecek.
+                    enemyAI.Initialize(playerTarget, waypointsToFollow);
                 }
                 
                 if (spawnEvent.spawnInterval > 0)

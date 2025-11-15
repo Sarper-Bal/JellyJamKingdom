@@ -502,7 +502,7 @@ Transform:
   m_GameObject: {fileID: 69575369}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 30}
+  m_LocalPosition: {x: -13.18, y: 0, z: 15.34}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -860,8 +860,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 178346692}
+  - component: {fileID: 178346693}
   m_Layer: 0
-  m_Name: path1
+  m_Name: EnemyPath
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -885,6 +886,23 @@ Transform:
   - {fileID: 1680393829}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &178346693
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 178346691}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348e13277291b4d74816c4fa120733a5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.EnemyPath
+  pathID: 1
+  waypoints:
+  - {fileID: 2055392441}
+  - {fileID: 69575370}
+  - {fileID: 1680393829}
 --- !u!4 &181848847 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: ecfd6a64769da8540b398d3d3487ad2d, type: 3}
@@ -10989,7 +11007,7 @@ Transform:
   m_GameObject: {fileID: 2055392440}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 20.78}
+  m_LocalPosition: {x: 5.31, y: -1.23, z: 20.78}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -11662,6 +11680,7 @@ SceneRoots:
   - {fileID: 1592796606}
   - {fileID: 1208334975}
   - {fileID: 2034613986}
+  - {fileID: 178346692}
   - {fileID: 609152702}
   - {fileID: 188104320}
   - {fileID: 973872934}
@@ -11671,7 +11690,6 @@ SceneRoots:
   - {fileID: 505134148}
   - {fileID: 610005744}
   - {fileID: 923834361}
-  - {fileID: 178346692}
   - {fileID: 1147650015}
   - {fileID: 1551019707}
   - {fileID: 974792957}
