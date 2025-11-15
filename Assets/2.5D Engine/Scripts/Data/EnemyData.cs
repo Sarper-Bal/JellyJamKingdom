@@ -1,8 +1,8 @@
 /*
- * DÜŞMAN VERİSİ (SCRIPTABLE OBJECT) - v1.1
+ * DÜŞMAN VERİSİ (SCRIPTABLE OBJECT) - v1.2
  * * DEĞİŞİKLİKLER:
- * - 'Temel Statlar' bölümüne 'characterSprite' (Sprite) alanı eklendi.
- * - Bu, düşmanın görselini de data-driven hale getirir.
+ * - 'Görsel' bölümüne 'scale' (Vector3) alanı eklendi.
+ * - Varsayılan değeri (1, 1, 1) olarak ayarlandı.
  */
 
 using UnityEngine;
@@ -31,11 +31,14 @@ public class EnemyData : ScriptableObject
     [Min(0)]
     public int damageAmount = 10;
     
-    // --- DEĞİŞİKLİK BAŞLANGICI ---
     [Header("Görsel")]
     [Tooltip("Bu düşman tipinin kullanacağı ana Sprite. " +
              "EnemyAI'daki Sprite Renderer'a atanacak.")]
-    public Sprite characterSprite; // <-- YENİ EKLENDİ
+    public Sprite characterSprite;
+    
+    // --- DEĞİŞİKLİK BAŞLANGICI ---
+    [Tooltip("Düşman prefab'ının ana transform'unun varsayılan boyutu (scale).")]
+    public Vector3 scale = Vector3.one; // Vector3.one = (1, 1, 1)
     // --- DEĞİŞİKLİK SONU ---
     
     [Header("Yapay Zeka Davranışı")]

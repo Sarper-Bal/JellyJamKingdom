@@ -1,13 +1,11 @@
 /*
- * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.2)
+ * DÜŞMAN YAPAY ZEKASI (ENEMY AI) - DATA-DRIVEN MOTOR (v3.3)
  *
- * * DEĞİŞİKLİKLER (v3.2 - Görsel Entegrasyonu):
- * - 'Awake()' metodu artık 'InitializeVisuals()' adında yeni bir
- * fonksiyonu çağırıyor.
- * - 'InitializeVisuals()' (YENİ METOT): 'spriteRenderer' referansını
- * kontrol eder ve 'enemyData' içindeki 'characterSprite'ı atar.
- * - Bu, tıpkı 'PlayerStats' component'i gibi, görsellerin de
- * data-driven olmasını sağlar.
+ * * DEĞİŞİKLİKLER (v3.3 - Scale Entegrasyonu):
+ * - 'InitializeVisuals()' metodu güncellendi.
+ * - Artık 'enemyData'dan 'scale' verisini okuyor ve bunu
+ * doğrudan bu objenin 'transform.localScale'ine atıyor.
+ * - Bu, düşmanın boyutunun da data-driven olmasını sağlar.
  */
 
 using UnityEngine;
@@ -18,13 +16,10 @@ namespace IndianOceanAssets.Engine2_5D
     public class EnemyAI : MonoBehaviour
     {
         [Header("Veri Kaynağı (ZORUNLU)")]
-        [Tooltip("Bu düşmanın tüm statlarını ve davranışlarını belirleyen " +
-                 "ScriptableObject verisi.")]
         [SerializeField] private EnemyData enemyData;
 
         [Header("Bileşen Referansları")]
-        [Tooltip("Yön değiştirdiğinde dönecek ve 'EnemyData'dan sprite alacak " +
-                 "Renderer. (Genellikle GFX alt objesindedir)")]
+        [Tooltip("Görseli (Sprite) ayarlamak için GFX objesinin SpriteRenderer'ı.")]
         [SerializeField] private SpriteRenderer spriteRenderer;
 
         // --- Motorun Anlık (Runtime) Verileri ---
@@ -39,48 +34,52 @@ namespace IndianOceanAssets.Engine2_5D
                 Debug.LogError($"'{gameObject.name}' üzerinde 'EnemyData' asset'i atanmamış! " +
                                "EnemyAI çalışmayacak.", this);
                 this.enabled = false; 
-                return; // 'enemyData' yoksa devam etme
+                return;
             }
             
-            // --- DEĞİŞİKLİK BAŞLANGICI (v3.2) ---
-            // 'enemyData' bulunduğuna göre, görselleri ata.
-            // Bu, havuzdan çıksa bile sadece bir kez (veya prefab güncellenirse)
-            // çalışır ve sprite'ı ayarlar.
+            // Görselleri ve boyutu ayarla.
+            // Bu 'Awake'te yapılır, çünkü bu ayarlar spawn/despawn
+            // sırasında (OnEnable/OnDisable) sürekli değişmeyecek.
             InitializeVisuals();
-            // --- DEĞİŞİKLİK SONU ---
         }
         
-        // --- DEĞİŞİKLİK BAŞLANGICI (v3.2 - YENİ METOT) ---
         /// <summary>
-        /// 'EnemyData'dan okunan 'characterSprite'ı 'spriteRenderer'a atar.
-        /// Tıpkı 'PlayerStats'taki 'InitializeVisuals' gibi çalışır.
+        /// 'EnemyData'dan görselleri ve boyutu okuyup ayarlar.
         /// </summary>
         private void InitializeVisuals()
         {
-            // 1. Inspector'da bir SpriteRenderer atanmış mı?
+            // 1. Sprite Ayarı (v3.2'den)
             if (spriteRenderer == null)
             {
-                // Atanmamış. Bu bir hata değil, belki bu AI'ın
-                // sprite'ı yoktur. Uyarı verip geç.
-                Debug.LogWarning($"'{gameObject.name}' üzerindeki EnemyAI'a bir 'Sprite Renderer' " +
+                Debug.LogWarning($"'{gameObject.name}' üzerindeki EnemyAI'a 'Sprite Renderer' " +
                                  "atanmamış. Görsel ayarlanmayacak.", this);
-                return;
-            }
-
-            // 2. 'EnemyData' asset'inde bir sprite tanımlanmış mı?
-            if (enemyData.characterSprite != null)
-            {
-                // Evet, sprite'ı ata.
-                spriteRenderer.sprite = enemyData.characterSprite;
             }
             else
             {
-                // Renderer var ama data'da sprite yok.
-                Debug.LogWarning($"'{enemyData.name}' asset'inde 'Character Sprite' alanı boş. " +
-                                 $"'{spriteRenderer.name}' üzerindeki mevcut sprite korunacak.", this);
+                if (enemyData.characterSprite != null)
+                {
+                    spriteRenderer.sprite = enemyData.characterSprite;
+                }
+                else
+                {
+                    Debug.LogWarning($"'{enemyData.name}' asset'inde 'Character Sprite' alanı boş. " +
+                                     $"Mevcut sprite korunacak.", this);
+                }
             }
+            
+            // --- DEĞİŞİKLİK BAŞLANGICI (v3.3) ---
+            // 2. Scale (Boyut) Ayarı
+            // 'enemyData.scale' (1, 1, 1) değilse, prefab'ın ana scale'ini ez.
+            if (enemyData.scale != Vector3.one && enemyData.scale != Vector3.zero)
+            {
+                // İsteğiniz üzerine GFX'in değil, doğrudan bu component'in
+                // bağlı olduğu 'transform'un scale'ini değiştiriyoruz.
+                transform.localScale = enemyData.scale;
+            }
+            // (Eğer data'da (1,1,1) ise, prefab'ın orijinal
+            // ayarını korumak için hiçbir şey yapmayız, bu da optimize bir yoldur)
+            // --- DEĞİŞİKLİK SONU ---
         }
-        // --- DEĞİŞİKLİK SONU ---
         
         /// <summary>
         /// Bu düşmanın motorunu başlatır ('WaveManager' tarafından çağrılır).
@@ -91,11 +90,11 @@ namespace IndianOceanAssets.Engine2_5D
             this.currentPathWaypoints = path;
             this.currentWaypointIndex = 0; 
             
+            // Uyarı kontrolleri (Değişiklik yok)
             if (enemyData.movementType == MovementType.ChasePlayer && this.chaseTarget == null)
             {
                 Debug.LogWarning("EnemyAI: 'ChasePlayer' modunda ancak 'targetToChase' (Player) null geldi.", this);
             }
-            
             if (enemyData.movementType == MovementType.FollowPath && (this.currentPathWaypoints == null || this.currentPathWaypoints.Length == 0))
             {
                 Debug.LogWarning("EnemyAI: 'FollowPath' modunda ancak 'path' (Waypoints) boş veya null geldi. " +
@@ -124,13 +123,16 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- HAREKET METOTLARI (v3.1 - Değişiklik yok) ---
-        #region Movement Handlers (No Change)
+        // --- HAREKET VE DİĞER METOTLAR (v3.1 - Değişiklik yok) ---
+        #region Movement, Collision, and Data Accessors (No Change)
         
         private void HandleChasePlayerMovement()
         {
             if (chaseTarget)
             {
+                // Not: Sprite flip'leri 'transform.localScale'i ezmez,
+                // sadece X yönünü değiştirir. Bu yüzden scale
+                // sistemimizle uyumlu çalışır.
                 if (chaseTarget.position.x > transform.position.x)
                     spriteRenderer.flipX = false;
                 else
@@ -146,21 +148,15 @@ namespace IndianOceanAssets.Engine2_5D
         
         private void HandleFollowPathMovement()
         {
-            if (currentPathWaypoints == null || currentPathWaypoints.Length == 0)
-            {
-                return; 
-            }
-            
+            if (currentPathWaypoints == null || currentPathWaypoints.Length == 0) return; 
             if (currentWaypointIndex >= currentPathWaypoints.Length)
             {
                 if (enemyData.loopPath) { currentWaypointIndex = 0; }
                 else { return; }
             }
-            
             Transform targetWaypoint = currentPathWaypoints[currentWaypointIndex];
             if (targetWaypoint == null) return;
             
-            // 2.5D (Y-Ekseni) düzeltmesi
             Vector3 targetPositionOnGround = new Vector3(
                 targetWaypoint.position.x, 
                 transform.position.y, 
@@ -194,15 +190,9 @@ namespace IndianOceanAssets.Engine2_5D
             transform.position += enemyData.fixedDirection.normalized * enemyData.speed * Time.deltaTime;
         }
         
-        #endregion
-
-        /// <summary>
-        /// Çarpışma mantığı (Değişiklik yok)
-        /// </summary>
         void OnCollisionEnter(Collision collision)
         {
             if (enemyData == null) return; 
-            
             if (collision.collider.CompareTag("Player"))
             {
                 collision.collider.GetComponent<HealthSystem>().Damage(enemyData.damageAmount);
@@ -210,17 +200,13 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
         
-        /// <summary>
-        /// 'HealthSystem'in can verisini alması için (Değişiklik yok)
-        /// </summary>
         public int GetMaxHealthFromData()
         {
-            if (enemyData != null)
-            {
-                return enemyData.maxHealth;
-            }
+            if (enemyData != null) { return enemyData.maxHealth; }
             Debug.LogError("EnemyData atanmadığı için can 1 olarak ayarlandı!", this);
             return 1;
         }
+        
+        #endregion
     }
 }
