@@ -1,24 +1,26 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v1.7 (Payload Sistemi)
+ * DOST NPC YAPAY ZEKASI (MOTOR) - v1.8 (Kapasite Sistemi)
  *
- * * DEĞİŞİKLİKLER (v1.7):
- * - YENİ ALAN: 'hasResourcePayload' (bool) eklendi. NPC'nin elinde
- * kaynak olup olmadığını tutar.
- * - 'GoToWork()' metodu, 'hasResourcePayload'u 'false' yaparak
- * NPC'nin işe "eli boş" gitmesini sağlar.
- * - 'ReturnHome()' metodunun imzası değişti: 'ReturnHome(bool didCollectResource)'.
- * 'NpcHousing' bu metodu çağırarak NPC'ye yükü verip vermediğini söyler.
- * - 'OnArrivedAtHome' event'inin imzası değişti: 'Action<FriendlyNpcAI, bool>'.
- * Artık eve vardığında 'NpcHousing'e yük durumunu (payload) raporlar.
+ * * DEĞİŞİKLİKLER (v1.8):
+ * - 'hasResourcePayload' (bool) alanı, 'currentPayloadAmount' (int)
+ * olarak değiştirildi. Artık ne kadar kaynak taşıdığını biliyor.
+ * - 'ReturnHome()' metodunun imzası 'ReturnHome(int collectedAmount)'
+ * olarak değiştirildi. 'NpcHousing' tam olarak kaç kaynak
+ * toplandığını bu metoda iletecek.
+ * - 'OnArrivedAtHome' event'inin imzası değişti: 'Action<FriendlyNpcAI, int>'.
+ * Artık eve vardığında 'NpcHousing'e taşıdığı kaynak miktarını
+ * raporlar.
  * - 'ArrivedAtTarget()' metodu, 'OnArrivedAtHome' event'ini
- * bu yeni imzayla ('hasResourcePayload' ile) tetikleyecek şekilde güncellendi.
+ * 'currentPayloadAmount' ile tetikliyor.
+ * - YENİ METOT: 'GetNpcData()' eklendi. 'NpcHousing'in bu NPC'nin
+ * 'maxCarryCapacity' bilgisine erişebilmesi için gereklidir.
  */
 
 using UnityEngine;
 
 public class FriendlyNpcAI : MonoBehaviour
 {
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Event İmzası) ---
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Event İmzası) ---
     /// <summary>
     /// NPC iş yerine (workSpot) ulaştığında tetiklenir.
     /// </summary>
@@ -26,9 +28,9 @@ public class FriendlyNpcAI : MonoBehaviour
     
     /// <summary>
     /// NPC evine (homeTransform) ulaştığında tetiklenir.
-    /// 'bool' parametresi, 'true' ise elinde kaynakla döndüğünü belirtir.
+    /// 'int' parametresi, ne kadar kaynakla döndüğünü belirtir (0 = eli boş).
     /// </summary>
-    public event System.Action<FriendlyNpcAI, bool> OnArrivedAtHome;
+    public event System.Action<FriendlyNpcAI, int> OnArrivedAtHome;
     // --- DEĞİŞİKLİK SONU ---
 
     private enum State
@@ -41,7 +43,6 @@ public class FriendlyNpcAI : MonoBehaviour
     [Header("Bileşen Referansları (Zorunlu)")]
     [SerializeField] private SpriteRenderer spriteRenderer; 
     
-    // Anlık (Runtime) Veriler
     private FriendlyNpcData npcData;
     private Transform homeTransform;
     private Transform workSpotTransform;
@@ -49,14 +50,14 @@ public class FriendlyNpcAI : MonoBehaviour
     private State currentState = State.Idle;
     private Transform currentTarget;
 
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Payload) ---
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Kapasite) ---
     /// <summary>
-    /// NPC'nin o an elinde kaynak taşıyıp taşımadığını belirtir.
+    /// NPC'nin o an elinde taşıdığı kaynak miktarı.
     /// </summary>
-    private bool hasResourcePayload = false;
+    private int currentPayloadAmount = 0;
+    // private bool hasResourcePayload = false; // <-- SİLİNDİ
     // --- DEĞİŞİKLİK SONU ---
     
-    // Optimize edilmiş mesafe kontrolü için (v1.6)
     private float sqrArrivalDistanceThreshold;
     private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f;
 
@@ -66,7 +67,6 @@ public class FriendlyNpcAI : MonoBehaviour
         {
             Debug.LogError("FriendlyNpcAI: 'Sprite Renderer' alanı Inspector'dan atanmamış!", this);
         }
-        // Optimize edilmiş mesafe eşiğini hesapla
         sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD;
     }
 
@@ -140,10 +140,10 @@ public class FriendlyNpcAI : MonoBehaviour
         }
     }
     
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Olay Tetikleyici) ---
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Olay Tetikleyici) ---
     /// <summary>
     /// Hedefe ulaşıldığında çağrılır.
-    /// Eve vardığında yük (payload) durumunu raporlar.
+    /// Eve vardığında yük (payload) miktarını raporlar.
     /// </summary>
     private void ArrivedAtTarget()
     {
@@ -152,24 +152,24 @@ public class FriendlyNpcAI : MonoBehaviour
         
         if (previousState == State.GoingToWork)
         {
-            // "İş yerine vardım!" (Yük her zaman 'false' olur)
+            // "İş yerine vardım!"
             OnArrivedAtWork?.Invoke(this);
         }
         else if (previousState == State.ReturningHome)
         {
-            // "Eve vardım!" (Yük 'true' veya 'false' olabilir)
-            OnArrivedAtHome?.Invoke(this, hasResourcePayload);
+            // "Eve vardım!" (Taşıdığı miktarı raporla)
+            OnArrivedAtHome?.Invoke(this, currentPayloadAmount);
         }
     }
 
-    // --- Komut Metotları (v1.7) ---
+    // --- Komut Metotları (v1.8) ---
     
     /// <summary>
     /// NpcHousing'den "İşe Git" komutu alır
     /// </summary>
     public void GoToWork()
     {
-        hasResourcePayload = false; // İşe giderken elin boş
+        currentPayloadAmount = 0; // İşe giderken elin boş (0 kaynak)
         currentState = State.GoingToWork;
         currentTarget = workSpotTransform;
     }
@@ -177,12 +177,21 @@ public class FriendlyNpcAI : MonoBehaviour
     /// <summary>
     /// NpcHousing'den "Eve Dön" komutu alır
     /// </summary>
-    /// <param name="didCollectResource">NPC'nin kaynak alıp almadığı</param>
-    public void ReturnHome(bool didCollectResource)
+    /// <param name="collectedAmount">NPC'nin ne kadar kaynak topladığı</param>
+    public void ReturnHome(int collectedAmount)
     {
-        hasResourcePayload = didCollectResource; // Kaynak durumunu ayarla
+        currentPayloadAmount = collectedAmount; // Kaynak miktarını ayarla (0 olabilir)
         currentState = State.ReturningHome;
         currentTarget = homeTransform;
+    }
+    
+    /// <summary>
+    /// 'NpcHousing'in bu NPC'nin 'maxCarryCapacity'
+    /// gibi verilerine erişmesini sağlar.
+    /// </summary>
+    public FriendlyNpcData GetNpcData()
+    {
+        return npcData;
     }
     // --- DEĞİŞİKLİK SONU ---
     
