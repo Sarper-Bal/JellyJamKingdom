@@ -1,14 +1,19 @@
 /*
- * NPC EVİ (BEYİN/YÖNETİCİ) - v1.4 (Eve Dönüş Düzeltmesi)
+ * NPC EVİ (BEYİN/YÖNETİCİ) - v1.5 (Modüler Hedef)
  *
- * * DEĞİŞİKLİKLER (v1.4):
- * - 'SpawnNpcs()' Coroutine'i güncellendi.
- * - 'homeTarget' adında yeni bir Transform değişkeni tanımlandı.
- * - Bu değişken, EĞER 'spawnPoint' atanmışsa 'spawnPoint'un
- * kendisini, atanmamışsa 'this.transform'u (evin merkezini) tutar.
- * - 'ai.Initialize()' metodu artık 'home' parametresi olarak 'this.transform'
- * yerine bu 'homeTarget' değişkenini gönderiyor.
- * - Sonuç: NPC'ler artık 'spawnPoint'e geri dönecekler.
+ * * DEĞİŞİKLİKLER (v1.5):
+ * - 'workSpot' alanı 'Transform' yerine 'WorkSpotInteractable'
+ * tipinde oldu. Artık doğrudan script'i atayacağız.
+ * - 'workDuration' alanı bu script'ten SİLİNDİ (WorkSpotInteractable'a taşındı).
+ * - 'Start()' metodu artık 'GetComponent' çağırmıyor.
+ * - 'SpawnNpcs()' metodu güncellendi:
+ * - NPC'ye hedef olarak 'workSpot.transform'u değil, 'workSpot'un
+ * içindeki 'interactionPoint'u atıyor.
+ * - Eğer 'interactionPoint' boşsa, güvenli olması için 'workSpot.transform'u
+ * (objenin merkezini) atıyor.
+ * - 'WorkCycle()' Coroutine'i güncellendi:
+ * - Bekleme süresini artık 'workSpot.workDuration'
+ * (yani hedefin kendi script'inden) okuyor.
  */
 
 using UnityEngine;
@@ -24,12 +29,14 @@ public class NpcHousing : MonoBehaviour
     [SerializeField] private FriendlyNpcData npcDataToSpawn;
 
     [Header("Davranış")]
-    [Tooltip("NPC'lerin evden çıkıp gideceği hedef nokta (örn: Maden, Tarla). " +
-             "Bu objenin üzerinde 'WorkSpotInteractable' script'i OLMALI.")]
-    [SerializeField] private Transform workSpot;
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.5) ---
+    [Tooltip("NPC'lerin evden çıkıp gideceği hedef 'WorkSpotInteractable' script'i. " +
+             "(Doğrudan 'Ağaç' veya 'Taş' objesini sürükleyin)")]
+    [SerializeField] private WorkSpotInteractable workSpot; // <-- Tipi Değişti
     
-    [Tooltip("NPC'lerin iş yerinde kaç saniye 'çalışacakları' (bekleyecekleri).")]
-    [SerializeField] private float workDuration = 5.0f;
+    // 'workDuration' alanı buradan kaldırıldı, 'WorkSpotInteractable'a taşındı
+    // [SerializeField] private float workDuration = 5.0f; // <-- SİLİNDİ
+    // --- DEĞİŞİKLİK SONU ---
 
     [Tooltip("NPC'lerin eve döndükten sonra tekrar işe gitmeden önce " +
              "kaç saniye 'dinlenecekleri'.")]
@@ -44,26 +51,20 @@ public class NpcHousing : MonoBehaviour
     [Tooltip("NPC'lerin evden teker teker çıkması için aradaki saniye farkı.")]
     [SerializeField] private float spawnInterval = 1.5f;
     
-    // Etkileşim script referansı
-    private WorkSpotInteractable workSpotInteractable;
+    // Not: 'workSpotInteractable' alanı, 'workSpot' olarak yeniden adlandırıldı.
     
     private void Start()
     {
         // 1. Gerekli referanslar atanmış mı?
         if (genericNpcPrefab == null || npcDataToSpawn == null || workSpot == null)
         {
-            Debug.LogError($"NpcHousing ({gameObject.name}): Referanslar eksik. NPC spawn edilemez.", this);
+            Debug.LogError($"NpcHousing ({gameObject.name}): Referanslar eksik. " +
+                             "(Prefab, Data veya Work Spot atanmamış). NPC spawn edilemez.", this);
             return;
         }
         
-        // 2. Etkileşim script'ini bul ve sakla
-        workSpotInteractable = workSpot.GetComponent<WorkSpotInteractable>();
-        if (workSpotInteractable == null)
-        {
-            Debug.LogWarning($"NpcHousing ({gameObject.name}): 'Work Spot' ({workSpot.name}) " +
-                             "üzerinde 'WorkSpotInteractable' script'i bulunamadı. " +
-                             "DOTween animasyonu tetiklenemeyecek.", this);
-        }
+        // 2. 'GetComponent' kısmı kaldırıldı, çünkü 'workSpot'
+        // artık doğrudan 'WorkSpotInteractable' tipinde.
         
         // 3. NPC'leri Spawn Etmeye Başla
         StartCoroutine(SpawnNpcs());
@@ -74,35 +75,34 @@ public class NpcHousing : MonoBehaviour
     /// </summary>
     private IEnumerator SpawnNpcs()
     {
-        // NPC'nin doğacağı POZİSYON
         Vector3 positionToSpawn = (spawnPoint != null) ? spawnPoint.position : transform.position;
-        
-        // --- DEĞİŞİKLİK BAŞLANGICI (v1.4) ---
-        // NPC'nin geri döneceği HEDEF (Transform)
-        // Eğer 'spawnPoint' atanmışsa, dönüş hedefi 'spawnPoint'tur.
-        // Atanmamışsa, dönüş hedefi evin merkezidir ('this.transform').
         Transform homeTarget = (spawnPoint != null) ? spawnPoint : this.transform;
+
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.5) ---
+        // 1. NPC'nin gideceği hedef 'Transform'u belirle
+        // 'WorkSpot'un 'interactionPoint'u ayarlanmış mı?
+        Transform workTarget = (workSpot.interactionPoint != null) 
+            ? workSpot.interactionPoint // Evet, o noktayı kullan
+            : workSpot.transform;       // Hayır, objenin merkezini kullan
         // --- DEĞİŞİKLİK SONU ---
 
         for (int i = 0; i < populationCount; i++)
         {
-            // 1. NPC'yi YARAT (Instantiate)
+            // 2. NPC'yi YARAT
             GameObject npcGO = Instantiate(
                 genericNpcPrefab, 
                 positionToSpawn,
                 Quaternion.identity
             );
 
-            // 2. NPC'nin motorunu (AI) bul
+            // 3. NPC'nin motorunu (AI) bul
             FriendlyNpcAI ai = npcGO.GetComponent<FriendlyNpcAI>();
             if (ai != null)
             {
-                // --- DEĞİŞİKLİK BAŞLANGICI (v1.4) ---
-                // 3. NPC'yi başlat! (Eve dönüş hedefi olarak 'homeTarget'i ver)
-                ai.Initialize(npcDataToSpawn, homeTarget, workSpot);
-                // --- DEĞİŞİKLİK SONU ---
+                // 4. NPC'yi başlat! (Eve dönüş hedefi 'homeTarget', iş hedefi 'workTarget')
+                ai.Initialize(npcDataToSpawn, homeTarget, workTarget); // <-- GÜNCELLENDİ
                 
-                // 4. NPC'nin "Beyin"e rapor vermesi için event'lerine abone ol
+                // 5. NPC'nin "Beyin"e rapor vermesi için event'lerine abone ol
                 ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
                 ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
             }
@@ -112,28 +112,24 @@ public class NpcHousing : MonoBehaviour
                                "bulunamadı!", genericNpcPrefab);
             }
 
-            // 5. Bir sonraki spawn için bekle
+            // 6. Bir sonraki spawn için bekle
             yield return new WaitForSeconds(spawnInterval);
         }
     }
     
-    // --- BU METOTLARDA DEĞİŞİKLİK YOK ---
+    // --- Event Dinleyicileri (Değişiklik Yok) ---
     
-    /// <summary>
-    /// Bir NPC iş yerine ulaştığında bu metot tetiklenir.
-    /// </summary>
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
     {
         StartCoroutine(WorkCycle(npc));
     }
 
-    /// <summary>
-    /// Bir NPC eve ulaştığında bu metot tetiklenir.
-    /// </summary>
     private void HandleNpcArrivedAtHome(FriendlyNpcAI npc)
     {
         StartCoroutine(RestCycle(npc));
     }
+
+    // --- Coroutine'ler (WorkCycle Güncellendi) ---
 
     /// <summary>
     /// NPC'nin iş yerindeki bekleme ve etkileşim sürecini yönetir.
@@ -141,13 +137,17 @@ public class NpcHousing : MonoBehaviour
     private IEnumerator WorkCycle(FriendlyNpcAI npc)
     {
         // 1. Etkileşimi (DOTween animasyonunu) tetikle
-        if (workSpotInteractable != null)
+        // (Artık 'workSpotInteractable' yerine 'workSpot' kullanıyoruz)
+        if (workSpot != null)
         {
-            workSpotInteractable.TriggerInteraction();
+            workSpot.TriggerInteraction();
         }
         
-        // 2. 'workDuration' kadar bekle
-        yield return new WaitForSeconds(workDuration);
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.5) ---
+        // 2. 'workDuration'ı artık 'workSpot'un
+        //    kendi üzerinden (editörden) oku
+        yield return new WaitForSeconds(workSpot.workDuration);
+        // --- DEĞİŞİKLİK SONU ---
         
         // 3. NPC'ye "Eve Dön" komutu ver
         if(npc != null) 

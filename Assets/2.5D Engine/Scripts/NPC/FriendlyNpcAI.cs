@@ -1,34 +1,29 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v1.4 (Event-Driven)
+ * DOST NPC YAPAY ZEKASI (MOTOR) - v1.6 (Performans Optimizasyonu)
  *
- * * DEĞİŞİKLİKLER (v1.4):
- * - Bu script artık "düşünen" taraf değil, sadece "yapan" taraf (Motor).
- * - 'ArrivedAtTarget' metodu artık kendi kendine karar vermiyor.
- * - 'OnArrivedAtWork' ve 'OnArrivedAtHome' adında iki YENİ event (olay) eklendi.
- * - 'ArrivedAtTarget' metodu, 'currentState'i 'Idle' yapar ve ilgili event'i
- * tetikler ('NpcHousing'in duyması için).
- * - 'GoToWork' ve 'ReturnHome' metotları 'NpcHousing'in
- * komut verebilmesi için 'public' yapıldı.
+ * * DEĞİŞİKLİKLER (v1.6):
+ * - PERFORMANS SORUNU: 'Update()' içindeki 'Vector3.Distance' metodu,
+ * her frame yavaş bir "karekök" (Square Root) işlemi yapar.
+ * Bu, 200 NPC olduğunda CPU'yu yorar.
+ *
+ * - ÇÖZÜM:
+ * - 'sqrArrivalDistanceThreshold' adında yeni bir private float eklendi.
+ * - 'Awake()' içinde bu değişken, '0.1f * 0.1f' (yani 0.01f)
+ * olarak BİR KEZ hesaplanıp saklanır.
+ * - 'Update()' içindeki mesafe kontrolü,
+ * '(transform.position - targetPositionOnGround).sqrMagnitude'
+ * (mesafenin karesi) ile değiştirildi.
+ *
+ * - SONUÇ: Yeni sistem (sqrMagnitude), karekök işlemi yapmadığı için
+ * 'Vector3.Distance' kullanmaktan ÇOK DAHA HIZLIDIR ve mobil
+ * performans için kritiktir.
  */
 
 using UnityEngine;
 
+// Havuzlama (Pooling) kodu isteğiniz üzerine kaldırılmıştı (v1.3)
 public class FriendlyNpcAI : MonoBehaviour
 {
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.4 - Event'ler) ---
-    /// <summary>
-    /// NPC iş yerine (workSpot) ulaştığında tetiklenir.
-    /// 'NpcHousing' bu olayı dinler.
-    /// </summary>
-    public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
-    
-    /// <summary>
-    /// NPC evine (homeTransform) ulaştığında tetiklenir.
-    /// 'NpcHousing' bu olayı dinler.
-    /// </summary>
-    public event System.Action<FriendlyNpcAI> OnArrivedAtHome;
-    // --- DEĞİŞİKLİK SONU ---
-
     private enum State
     {
         Idle,
@@ -39,14 +34,20 @@ public class FriendlyNpcAI : MonoBehaviour
     [Header("Bileşen Referansları (Zorunlu)")]
     [SerializeField] private SpriteRenderer spriteRenderer; 
     
+    // Anlık (Runtime) Veriler
     private FriendlyNpcData npcData;
     private Transform homeTransform;
     private Transform workSpotTransform;
     
     private State currentState = State.Idle;
     private Transform currentTarget;
-    
-    // Not: Havuzlama (Pooling) kodları isteğiniz üzerine kaldırılmıştı.
+
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.6 - Optimizasyon) ---
+    // Hedefe vardığımızı anlamak için gereken mesafenin "karesi".
+    // 'Awake' içinde hesaplanır.
+    private float sqrArrivalDistanceThreshold;
+    private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f; // 0.1f mesafe
+    // --- DEĞİŞİKLİK SONU ---
 
     private void Awake()
     {
@@ -54,6 +55,12 @@ public class FriendlyNpcAI : MonoBehaviour
         {
             Debug.LogError("FriendlyNpcAI: 'Sprite Renderer' alanı Inspector'dan atanmamış!", this);
         }
+        
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.6) ---
+        // Eşik değerin karesini BİR KEZ hesapla ve sakla.
+        // Bu, 'Update' içinde her frame (0.1f * 0.1f) yapmaktan daha iyidir.
+        sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD; // (0.01f)
+        // --- DEĞİŞİKLİK SONU ---
     }
 
     /// <summary>
@@ -74,10 +81,7 @@ public class FriendlyNpcAI : MonoBehaviour
         this.workSpotTransform = workSpot;
         this.currentState = State.Idle;
 
-        // Görselleri ayarla
         InitializeVisuals();
-        
-        // Hareketi başlat (İlk komut)
         GoToWork();
     }
 
@@ -100,12 +104,12 @@ public class FriendlyNpcAI : MonoBehaviour
     
     private void Update()
     {
-        // Sadece hareket durumlarındayken çalış
         if (currentState == State.Idle || currentTarget == null || npcData == null)
         {
             return;
         }
-        
+
+        // 2.5D Hareket Mantığı (Y-Eksenini kilitle)
         Vector3 targetPositionOnGround = new Vector3(
             currentTarget.position.x, 
             transform.position.y,
@@ -117,25 +121,27 @@ public class FriendlyNpcAI : MonoBehaviour
         else if (targetPositionOnGround.x < transform.position.x)
             FlipSprite(true); 
             
+        // Hareket (MoveTowards) zaten hızlıdır, bu kalabilir.
         transform.position = Vector3.MoveTowards(
             transform.position, 
             targetPositionOnGround, 
             Time.deltaTime * npcData.speed
         );
 
-        if (Vector3.Distance(transform.position, targetPositionOnGround) < 0.1f)
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.6 - Optimize Edilmiş Kontrol) ---
+        // Hedefe ulaşıldı mı kontrol et
+        // 'Vector3.Distance(A, B)' yerine (A - B).sqrMagnitude kullanıyoruz.
+        // Bu, yavaş olan karekök (sqrt) işlemini yapmaz.
+        if ((transform.position - targetPositionOnGround).sqrMagnitude < sqrArrivalDistanceThreshold)
         {
-            // Hedefe ulaşıldı
+            // Orijinal yavaş kod:
+            // if (Vector3.Distance(transform.position, targetPositionOnGround) < ARRIVAL_DISTANCE_THRESHOLD)
+            
             ArrivedAtTarget();
         }
+        // --- DEĞİŞİKLİK SONU ---
     }
     
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.4 - Olay Tetikleyici) ---
-    /// <summary>
-    /// Hedefe ulaşıldığında çağrılır.
-    /// Artık kendi kendine karar vermiyor, sadece "Beyin"e (NpcHousing)
-    /// rapor veriyor.
-    /// </summary>
     private void ArrivedAtTarget()
     {
         State previousState = currentState;
@@ -143,38 +149,31 @@ public class FriendlyNpcAI : MonoBehaviour
         
         if (previousState == State.GoingToWork)
         {
-            // "İş yerine vardım!" diye event tetikle
             OnArrivedAtWork?.Invoke(this);
         }
         else if (previousState == State.ReturningHome)
         {
-            // "Eve vardım!" diye event tetikle
             OnArrivedAtHome?.Invoke(this);
         }
     }
 
-    // --- Komut Metotları (Artık 'public') ---
+    // --- Komut Metotları (Event'ler) ---
+    public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
+    public event System.Action<FriendlyNpcAI> OnArrivedAtHome;
     
-    /// <summary>
-    /// NpcHousing'den "İşe Git" komutu alır
-    /// </summary>
     public void GoToWork()
     {
         currentState = State.GoingToWork;
         currentTarget = workSpotTransform;
     }
 
-    /// <summary>
-    /// NpcHousing'den "Eve Dön" komutu alır
-    /// </summary>
     public void ReturnHome()
     {
         currentState = State.ReturningHome;
         currentTarget = homeTransform;
     }
-    // --- DEĞİŞİKLİK SONU ---
     
-    // Scale-uyumlu Flip metodu (Değişiklik yok)
+    // Scale-uyumlu Flip metodu
     private void FlipSprite(bool faceLeft)
     {
         Vector3 baseScale = Vector3.one;
