@@ -1,16 +1,22 @@
 /*
- * NPC EVİ (BEYİN/YÖNETİCİ) - v1.7 (Eve Dönüş Sayacı)
+ * NPC EVİ (BEYİN/YÖNETİCİ) - v1.9 (Gerçek Kaynak Transferi)
  *
- * GÖREVİ:
- * NPC'leri spawn eder VE onların yaşam döngüsünü yönetir.
- *
- * * DEĞİŞİKLİKLER (v1.7):
- * - Sayaç ve "Teşekkür" log'u 'HandleNpcArrivedAtWork'
- * metodundan KALDIRILDI.
- * - Sayaç ve "Teşekkür" log'u 'HandleNpcArrivedAtHome'
- * metoduna EKLENDİ.
- * - Artık bir NPC, işe gidip, çalışıp, evine (spawn point'e)
- * başarıyla geri döndüğünde sayaç artar.
+ * * DEĞİŞİKLİKLER (v1.9):
+ * - 'DecreaseCounter' metodu artık 'bool' (doğru/yanlış)
+ * döndürüyor. Kaynak varsa 'true' ve eksiltir, kaynak yoksa 'false' döndürür.
+ * - 'SpawnNpcs()' metodu, yeni 'OnArrivedAtHome(npc, payload)'
+ * event'ine abone olacak şekilde güncellendi.
+ * - 'HandleNpcArrivedAtWork()' (Transfer Modu) mantığı değişti:
+ * - Artık sayaçları ANINDA değiştirmiyor.
+ * - 'houseTarget.DecreaseCounter(1)' çağırarak kaynak almayı DENER.
+ * - Dönen 'bool' (başarılı/başarısız) sonucunu 'npc.ReturnHome(bool)'
+ * metoduna iletir.
+ * - 'HandleNpcArrivedAtHome()' metodunun imzası değişti:
+ * 'HandleNpcArrivedAtHome(FriendlyNpcAI npc, bool collectedResource)'
+ * - Artık sayaç artışı burada, NPC'nin eve geri döndüğü ve
+ * 'collectedResource' bayrağının 'true' olduğu anda yapılıyor.
+ * - 'WorkCycle()' Coroutine'i güncellendi: 'npc.ReturnHome()' artık
+ * 'npc.ReturnHome(true)' olarak çağrılıyor (Kaynak toplama her zaman başarılıdır).
  */
 
 using UnityEngine;
@@ -18,47 +24,54 @@ using System.Collections;
 
 public class NpcHousing : MonoBehaviour
 {
-    [Header("NPC Ayarları")]
-    [Tooltip("Bu evden spawn olacak NPC'lerin prefab'ı.")]
-    [SerializeField] private GameObject genericNpcPrefab;
+    public enum NpcJobType
+    {
+        GatherResource,
+        TransferResource
+    }
 
-    [Tooltip("Bu evden çıkacak NPC'lerin kullanacağı 'FriendlyNpcData' (Statlar).")]
+    [Header("NPC Ayarları")]
+    [SerializeField] private GameObject genericNpcPrefab;
     [SerializeField] private FriendlyNpcData npcDataToSpawn;
 
     [Header("Davranış")]
-    [Tooltip("NPC'lerin evden çıkıp gideceği hedef 'WorkSpotInteractable' script'i.")]
-    [SerializeField] private WorkSpotInteractable workSpot;
+    [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource;
+    [SerializeField] private WorkSpotInteractable resourceTarget;
+    [SerializeField] private NpcHousing houseTarget;
     
-    [Tooltip("NPC'lerin eve döndükten sonra tekrar işe gitmeden önce " +
-             "kaç saniye 'dinlenecekleri'.")]
+    [Tooltip("NPC'lerin evde dinlenme süresi.")]
     [SerializeField] private float restDuration = 3.0f;
-    
-    [Tooltip("(Opsiyonel) NPC'lerin tam olarak spawn olacağı nokta.")]
+    [Tooltip("(Opsiyonel) NPC'lerin doğacağı ve döneceği nokta.")]
     [SerializeField] private Transform spawnPoint; 
-
-    [Tooltip("Bu evde yaşayan ve spawn edilecek toplam NPC sayısı.")]
     [SerializeField] private int populationCount = 3;
-
-    [Tooltip("NPC'lerin evden teker teker çıkması için aradaki saniye farkı.")]
     [SerializeField] private float spawnInterval = 1.5f;
 
     [Header("Runtime İstatistikleri")]
-    [Tooltip("Bu eve bağlı NPC'ler tarafından tamamlanan toplam görev döngüsü sayısı.")]
+    [Tooltip("Bu evde toplanan/transfer edilen kaynak sayısı (sayaç).")]
     [SerializeField]
     private int tasksCompletedCounter = 0; 
     
-    private WorkSpotInteractable workSpotInteractable;
     
     private void Start()
     {
         // 1. Gerekli referanslar atanmış mı?
-        if (genericNpcPrefab == null || npcDataToSpawn == null || workSpot == null)
+        if (genericNpcPrefab == null || npcDataToSpawn == null)
         {
-            Debug.LogError($"NpcHousing ({gameObject.name}): Referanslar eksik.", this);
+            Debug.LogError($"NpcHousing ({gameObject.name}): 'Prefab' veya 'Data' atanmamış.", this);
             return;
         }
-        
-        workSpotInteractable = workSpot; 
+        if (jobType == NpcJobType.GatherResource && resourceTarget == null)
+        {
+            Debug.LogError($"NpcHousing ({gameObject.name}): JobType 'GatherResource' seçili " +
+                             "ancak 'Resource Target' (WorkSpot) atanmamış.", this);
+            return;
+        }
+        if (jobType == NpcJobType.TransferResource && houseTarget == null)
+        {
+            Debug.LogError($"NpcHousing ({gameObject.name}): JobType 'TransferResource' seçili " +
+                             "ancak 'House Target' (diğer ev) atanmamış.", this);
+            return;
+        }
         
         // 3. NPC'leri Spawn Etmeye Başla
         StartCoroutine(SpawnNpcs());
@@ -69,10 +82,22 @@ public class NpcHousing : MonoBehaviour
         Vector3 positionToSpawn = (spawnPoint != null) ? spawnPoint.position : transform.position;
         Transform homeTarget = (spawnPoint != null) ? spawnPoint : this.transform;
         
-        Transform workTarget = (workSpot.interactionPoint != null) 
-            ? workSpot.interactionPoint 
-            : workSpot.transform;
-        
+        // NPC'nin gideceği hedef 'Transform'u 'jobType'a göre belirle
+        Transform workTarget = null;
+        if (jobType == NpcJobType.GatherResource)
+        {
+            workTarget = (resourceTarget.interactionPoint != null) 
+                ? resourceTarget.interactionPoint 
+                : resourceTarget.transform;
+        }
+        else if (jobType == NpcJobType.TransferResource)
+        {
+            // Diğer evin 'spawnPoint'unu (veya merkezini) hedef al
+            workTarget = (houseTarget.spawnPoint != null) 
+                ? houseTarget.spawnPoint 
+                : houseTarget.transform;
+        }
+
         for (int i = 0; i < populationCount; i++)
         {
             GameObject npcGO = Instantiate(
@@ -84,11 +109,14 @@ public class NpcHousing : MonoBehaviour
             FriendlyNpcAI ai = npcGO.GetComponent<FriendlyNpcAI>();
             if (ai != null)
             {
-                ai.Initialize(npcDataToSpawn, homeTarget, workTarget);
+                ai.Initialize(npcDataToSpawn, homeTarget, workTarget); 
                 
+                // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Yeni Event Aboneliği) ---
                 // Event'lere abone ol
                 ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
+                // Yeni (bool) imzalı event'e abone ol
                 ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
+                // --- DEĞİŞİKLİK SONU ---
             }
             else
             {
@@ -100,55 +128,101 @@ public class NpcHousing : MonoBehaviour
         }
     }
     
+    
     /// <summary>
-    /// Bir NPC iş yerine ulaştığında bu metot tetiklenir.
+    /// Bir NPC iş yerine (veya hedef eve) ulaştığında bu metot tetiklenir.
     /// </summary>
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
     {
-        // --- DEĞİŞİKLİK (v1.7) ---
-        // Sayaç buradan kaldırıldı.
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Kaynak Kontrolü) ---
+        if (jobType == NpcJobType.GatherResource)
+        {
+            // İŞ 1: Kaynak Topla
+            StartCoroutine(WorkCycle(npc));
+        }
+        else if (jobType == NpcJobType.TransferResource)
+        {
+            // İŞ 2: Transfer Et
+            bool collectedResource = false;
+            if (houseTarget != null)
+            {
+                // 1. Hedef evden kaynak almayı DENE.
+                // 'DecreaseCounter' metodu artık kaynak varsa 'true' döner.
+                collectedResource = houseTarget.DecreaseCounter(1);
+            }
+            
+            if (collectedResource)
+                Debug.Log($"TRANSFER BAŞLADI: {houseTarget.name}'den 1 kaynak alındı.", this);
+            else
+                Debug.Log($"TRANSFER BAŞARISIZ: {houseTarget.name}'de kaynak yok! Eli boş dönülüyor...", this);
+
+            // 2. NPC'ye (başarılı veya başarısız) eve dön komutu ver
+            if(npc != null)
+                npc.ReturnHome(collectedResource); 
+        }
         // --- DEĞİŞİKLİK SONU ---
-        
-        // Çalışma döngüsünü başlat
-        StartCoroutine(WorkCycle(npc));
     }
 
     /// <summary>
     /// Bir NPC eve (spawn point'e) ulaştığında bu metot tetiklenir.
     /// </summary>
-    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc)
+    /// <param name="npc">Geri dönen NPC</param>
+    /// <param name="collectedResource">NPC'nin elinde kaynak olup olmadığı</param>
+    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, bool collectedResource)
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI (v1.7) ---
-        // 1. Sayaç buraya taşındı. Tam bir döngü tamamlandı.
-        tasksCompletedCounter++;
+        // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Sayaç Mantığı) ---
         
-        // 2. Teşekkür mesajı (Log)
-        Debug.Log($"Ev ({gameObject.name}): {tasksCompletedCounter}. tam döngü tamamlandı! " +
-                  $"Teşekkürler, {npc.name}, evine hoş geldin.");
+        // 1. Kaynak Toplama işinden mi döndü?
+        if (jobType == NpcJobType.GatherResource)
+        {
+            // 'WorkCycle' her zaman 'true' payload ile döner,
+            // yani kaynak topladı. Sayacı artır.
+            tasksCompletedCounter++;
+            Debug.Log($"Ev ({gameObject.name}): {tasksCompletedCounter}. kaynak toplandı! " +
+                      $"Teşekkürler, {npc.name}, evine hoş geldin.");
+        }
+        // 2. Transfer işinden mi döndü?
+        else if (jobType == NpcJobType.TransferResource)
+        {
+            // SADECE 'collectedResource' true ise (yani hedef evde kaynak varsa)
+            // sayacı artır.
+            if (collectedResource)
+            {
+                tasksCompletedCounter++;
+                Debug.Log($"Ev ({gameObject.name}): Transfer tamamlandı! " +
+                          $"Toplam kaynağımız: {tasksCompletedCounter}");
+            }
+            else
+            {
+                // Eli boş döndü, sayaç artmaz.
+                Debug.Log($"Ev ({gameObject.name}): {npc.name} transferden eli boş döndü. Dinleniyor...");
+            }
+        }
         // --- DEĞİŞİKLİK SONU ---
-        
-        // 3. Dinlenme döngüsünü başlat
+
+        // 3. Dinlenme döngüsünü başlat (Her iki iş tipi için de ortak)
         StartCoroutine(RestCycle(npc));
     }
 
     /// <summary>
     /// NPC'nin iş yerindeki bekleme ve etkileşim sürecini yönetir.
+    /// (Sadece 'GatherResource' işi için çağrılır)
     /// </summary>
     private IEnumerator WorkCycle(FriendlyNpcAI npc)
     {
-        // 1. Etkileşimi (DOTween animasyonunu) tetikle
-        if (workSpotInteractable != null)
+        if (resourceTarget != null)
         {
-            workSpotInteractable.TriggerInteraction();
+            resourceTarget.TriggerInteraction();
         }
         
-        // 2. Bekleme süresini 'workSpot'tan oku
-        yield return new WaitForSeconds(workSpotInteractable.workDuration);
+        yield return new WaitForSeconds(resourceTarget.workDuration);
         
-        // 3. NPC'ye "Eve Dön" komutu ver
         if(npc != null) 
         {
-            npc.ReturnHome();
+            // --- DEĞİŞİKLİK BAŞLANGICI (v1.9) ---
+            // Eve dönerken elinin "dolu" olduğunu bildir
+            npc.ReturnHome(true);
+            // --- DEĞİŞİKLİK SONU ---
         }
     }
 
@@ -157,13 +231,43 @@ public class NpcHousing : MonoBehaviour
     /// </summary>
     private IEnumerator RestCycle(FriendlyNpcAI npc)
     {
-        // 1. 'restDuration' kadar bekle
         yield return new WaitForSeconds(restDuration);
         
-        // 2. NPC'ye "İşe Git" komutu ver
         if(npc != null)
         {
             npc.GoToWork();
         }
     }
+    
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Geliştirilmiş Sayaç Metotları) ---
+    
+    /// <summary>
+    /// Bu evin sayacını dışarıdan artırır.
+    /// </summary>
+    public void IncreaseCounter(int amount)
+    {
+        tasksCompletedCounter += amount;
+    }
+    
+    /// <summary>
+    /// Bu evin sayacını dışarıdan azaltmayı DENER.
+    /// Sadece yeterli kaynak varsa 'true' döner.
+    /// </summary>
+    /// <returns>Kaynak başarıyla alındıysa 'true'</returns>
+    public bool DecreaseCounter(int amount)
+    {
+        // Yeterli kaynak var mı?
+        if (tasksCompletedCounter >= amount)
+        {
+            // Evet, kaynağı azalt ve 'başarılı' dön
+            tasksCompletedCounter -= amount;
+            return true;
+        }
+        else
+        {
+            // Hayır, kaynak yok. 'Başarısız' (eli boş) dön
+            return false;
+        }
+    }
+    // --- DEĞİŞİKLİK SONU ---
 }

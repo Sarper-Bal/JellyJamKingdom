@@ -1,29 +1,36 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v1.6 (Performans Optimizasyonu)
+ * DOST NPC YAPAY ZEKASI (MOTOR) - v1.7 (Payload Sistemi)
  *
- * * DEĞİŞİKLİKLER (v1.6):
- * - PERFORMANS SORUNU: 'Update()' içindeki 'Vector3.Distance' metodu,
- * her frame yavaş bir "karekök" (Square Root) işlemi yapar.
- * Bu, 200 NPC olduğunda CPU'yu yorar.
- *
- * - ÇÖZÜM:
- * - 'sqrArrivalDistanceThreshold' adında yeni bir private float eklendi.
- * - 'Awake()' içinde bu değişken, '0.1f * 0.1f' (yani 0.01f)
- * olarak BİR KEZ hesaplanıp saklanır.
- * - 'Update()' içindeki mesafe kontrolü,
- * '(transform.position - targetPositionOnGround).sqrMagnitude'
- * (mesafenin karesi) ile değiştirildi.
- *
- * - SONUÇ: Yeni sistem (sqrMagnitude), karekök işlemi yapmadığı için
- * 'Vector3.Distance' kullanmaktan ÇOK DAHA HIZLIDIR ve mobil
- * performans için kritiktir.
+ * * DEĞİŞİKLİKLER (v1.7):
+ * - YENİ ALAN: 'hasResourcePayload' (bool) eklendi. NPC'nin elinde
+ * kaynak olup olmadığını tutar.
+ * - 'GoToWork()' metodu, 'hasResourcePayload'u 'false' yaparak
+ * NPC'nin işe "eli boş" gitmesini sağlar.
+ * - 'ReturnHome()' metodunun imzası değişti: 'ReturnHome(bool didCollectResource)'.
+ * 'NpcHousing' bu metodu çağırarak NPC'ye yükü verip vermediğini söyler.
+ * - 'OnArrivedAtHome' event'inin imzası değişti: 'Action<FriendlyNpcAI, bool>'.
+ * Artık eve vardığında 'NpcHousing'e yük durumunu (payload) raporlar.
+ * - 'ArrivedAtTarget()' metodu, 'OnArrivedAtHome' event'ini
+ * bu yeni imzayla ('hasResourcePayload' ile) tetikleyecek şekilde güncellendi.
  */
 
 using UnityEngine;
 
-// Havuzlama (Pooling) kodu isteğiniz üzerine kaldırılmıştı (v1.3)
 public class FriendlyNpcAI : MonoBehaviour
 {
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Event İmzası) ---
+    /// <summary>
+    /// NPC iş yerine (workSpot) ulaştığında tetiklenir.
+    /// </summary>
+    public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
+    
+    /// <summary>
+    /// NPC evine (homeTransform) ulaştığında tetiklenir.
+    /// 'bool' parametresi, 'true' ise elinde kaynakla döndüğünü belirtir.
+    /// </summary>
+    public event System.Action<FriendlyNpcAI, bool> OnArrivedAtHome;
+    // --- DEĞİŞİKLİK SONU ---
+
     private enum State
     {
         Idle,
@@ -42,12 +49,16 @@ public class FriendlyNpcAI : MonoBehaviour
     private State currentState = State.Idle;
     private Transform currentTarget;
 
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.6 - Optimizasyon) ---
-    // Hedefe vardığımızı anlamak için gereken mesafenin "karesi".
-    // 'Awake' içinde hesaplanır.
-    private float sqrArrivalDistanceThreshold;
-    private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f; // 0.1f mesafe
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Payload) ---
+    /// <summary>
+    /// NPC'nin o an elinde kaynak taşıyıp taşımadığını belirtir.
+    /// </summary>
+    private bool hasResourcePayload = false;
     // --- DEĞİŞİKLİK SONU ---
+    
+    // Optimize edilmiş mesafe kontrolü için (v1.6)
+    private float sqrArrivalDistanceThreshold;
+    private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f;
 
     private void Awake()
     {
@@ -55,12 +66,8 @@ public class FriendlyNpcAI : MonoBehaviour
         {
             Debug.LogError("FriendlyNpcAI: 'Sprite Renderer' alanı Inspector'dan atanmamış!", this);
         }
-        
-        // --- DEĞİŞİKLİK BAŞLANGICI (v1.6) ---
-        // Eşik değerin karesini BİR KEZ hesapla ve sakla.
-        // Bu, 'Update' içinde her frame (0.1f * 0.1f) yapmaktan daha iyidir.
-        sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD; // (0.01f)
-        // --- DEĞİŞİKLİK SONU ---
+        // Optimize edilmiş mesafe eşiğini hesapla
+        sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD;
     }
 
     /// <summary>
@@ -82,7 +89,7 @@ public class FriendlyNpcAI : MonoBehaviour
         this.currentState = State.Idle;
 
         InitializeVisuals();
-        GoToWork();
+        GoToWork(); // İlk komut
     }
 
     private void InitializeVisuals()
@@ -108,8 +115,7 @@ public class FriendlyNpcAI : MonoBehaviour
         {
             return;
         }
-
-        // 2.5D Hareket Mantığı (Y-Eksenini kilitle)
+        
         Vector3 targetPositionOnGround = new Vector3(
             currentTarget.position.x, 
             transform.position.y,
@@ -121,27 +127,24 @@ public class FriendlyNpcAI : MonoBehaviour
         else if (targetPositionOnGround.x < transform.position.x)
             FlipSprite(true); 
             
-        // Hareket (MoveTowards) zaten hızlıdır, bu kalabilir.
         transform.position = Vector3.MoveTowards(
             transform.position, 
             targetPositionOnGround, 
             Time.deltaTime * npcData.speed
         );
 
-        // --- DEĞİŞİKLİK BAŞLANGICI (v1.6 - Optimize Edilmiş Kontrol) ---
-        // Hedefe ulaşıldı mı kontrol et
-        // 'Vector3.Distance(A, B)' yerine (A - B).sqrMagnitude kullanıyoruz.
-        // Bu, yavaş olan karekök (sqrt) işlemini yapmaz.
+        // Optimize edilmiş mesafe kontrolü (v1.6)
         if ((transform.position - targetPositionOnGround).sqrMagnitude < sqrArrivalDistanceThreshold)
         {
-            // Orijinal yavaş kod:
-            // if (Vector3.Distance(transform.position, targetPositionOnGround) < ARRIVAL_DISTANCE_THRESHOLD)
-            
             ArrivedAtTarget();
         }
-        // --- DEĞİŞİKLİK SONU ---
     }
     
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.7 - Olay Tetikleyici) ---
+    /// <summary>
+    /// Hedefe ulaşıldığında çağrılır.
+    /// Eve vardığında yük (payload) durumunu raporlar.
+    /// </summary>
     private void ArrivedAtTarget()
     {
         State previousState = currentState;
@@ -149,31 +152,40 @@ public class FriendlyNpcAI : MonoBehaviour
         
         if (previousState == State.GoingToWork)
         {
+            // "İş yerine vardım!" (Yük her zaman 'false' olur)
             OnArrivedAtWork?.Invoke(this);
         }
         else if (previousState == State.ReturningHome)
         {
-            OnArrivedAtHome?.Invoke(this);
+            // "Eve vardım!" (Yük 'true' veya 'false' olabilir)
+            OnArrivedAtHome?.Invoke(this, hasResourcePayload);
         }
     }
 
-    // --- Komut Metotları (Event'ler) ---
-    public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
-    public event System.Action<FriendlyNpcAI> OnArrivedAtHome;
+    // --- Komut Metotları (v1.7) ---
     
+    /// <summary>
+    /// NpcHousing'den "İşe Git" komutu alır
+    /// </summary>
     public void GoToWork()
     {
+        hasResourcePayload = false; // İşe giderken elin boş
         currentState = State.GoingToWork;
         currentTarget = workSpotTransform;
     }
 
-    public void ReturnHome()
+    /// <summary>
+    /// NpcHousing'den "Eve Dön" komutu alır
+    /// </summary>
+    /// <param name="didCollectResource">NPC'nin kaynak alıp almadığı</param>
+    public void ReturnHome(bool didCollectResource)
     {
+        hasResourcePayload = didCollectResource; // Kaynak durumunu ayarla
         currentState = State.ReturningHome;
         currentTarget = homeTransform;
     }
+    // --- DEĞİŞİKLİK SONU ---
     
-    // Scale-uyumlu Flip metodu
     private void FlipSprite(bool faceLeft)
     {
         Vector3 baseScale = Vector3.one;
