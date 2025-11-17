@@ -4420,7 +4420,7 @@ MonoBehaviour:
   npcDataToSpawn: {fileID: 11400000, guid: 46840630fa28f40c9a19b9588e996f08, type: 2}
   jobType: 0
   resourceTarget: {fileID: 1147034969}
-  houseTarget: {fileID: 735447905}
+  houseTarget: {fileID: 290435000}
   restDuration: 0
   spawnPoint: {fileID: 1929318610}
   optionalNpcPath: {fileID: 308589861}

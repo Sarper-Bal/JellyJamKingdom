@@ -1,14 +1,21 @@
 /*
- * NPC EVİ (BEYİN/YÖNETİCİ) - v2.1 (Opsiyonel Yol Ataması)
+ * NPC EVİ (BEYİN/YÖNETİCİ) - v3.0 (Data-Driven Refactor)
  *
- * * DEĞİŞİKLİKLER (v2.1):
- * - YENİ ALAN: '[SerializeField] private NpcPath optionalNpcPath;' eklendi.
- * - Bu, Inspector'dan bu eve özel bir yol atamamızı sağlar.
- * - 'SpawnNpcs()' metodu güncellendi:
- * - 'ai.Initialize()' metodunu 4 parametre ile çağırıyor
- * ve 'optionalNpcPath' referansını NPC'ye iletiyor.
- * - Eğer 'optionalNpcPath' boş (null) bırakılırsa,
- * 'FriendlyNpcAI' bunu algılayıp direkt gitme modunda çalışacaktır.
+ * GÖREVİ:
+ * Artık bir "Motor"dur. 'NpcHousingData' asset'inden aldığı veriyi
+ * kullanarak, 'jobType' ile belirlenen mantığı çalıştırır.
+ *
+ * * DEĞİŞİKLİKLER (v3.0):
+ * - 'genericNpcPrefab', 'npcDataToSpawn', 'restDuration', 
+ * 'populationCount', 'spawnInterval' alanları YENİ 'NpcHousingData'
+ * ScriptableObject'ine taşındı.
+ * - YENİ ALAN: '[SerializeField] private NpcHousingData housingData;'
+ * eklendi.
+ * - KULLANICI İSTEĞİ: 'jobType' (davranış) prefab üzerinde kalmaya
+ * devam ediyor.
+ * - Sahne referansları ('resourceTarget', 'houseTarget', 'spawnPoint', 
+ * 'optionalNpcPath') prefab üzerinde kalmaya devam ediyor.
+ * - Tüm metotlar artık verileri 'housingData' asset'inden okuyor.
  */
 
 using UnityEngine;
@@ -16,49 +23,68 @@ using System.Collections;
 
 public class NpcHousing : MonoBehaviour
 {
-    public enum NpcJobType
-    {
-        GatherResource,
-        TransferResource
-    }
-
-    [Header("NPC Ayarları")]
-    [SerializeField] private GameObject genericNpcPrefab;
-    [SerializeField] private FriendlyNpcData npcDataToSpawn;
-
-    [Header("Davranış")]
-    [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource;
-    [SerializeField] private WorkSpotInteractable resourceTarget;
-    [SerializeField] private NpcHousing houseTarget;
-    [SerializeField] private float restDuration = 3.0f;
+    // --- VERİ ---
+    [Header("Veri Kaynağı (ZORUNLU)")]
+    [Tooltip("Bu evin 'ne' spawn edeceği, 'kaç tane' spawn edeceği " +
+             "gibi temel verilerini tutan ScriptableObject asset'i.")]
+    [SerializeField] private NpcHousingData housingData;
     
-    [Header("Konumlandırma")]
+    // --- DAVRANIŞ (PREFAB ÜZERİNDE) ---
+    [Header("Davranış (Prefab Üzerinde)")]
+    [Tooltip("Bu evin NPC'lerinin yapacağı işin tipi.")]
+    [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource; // <-- BURADA KALDI
+    
+    // --- SAHNE HEDEFLERİ (PREFAB ÜZERİNDE) ---
+    [Header("Sahne Hedefleri (Prefab Üzerinde)")]
+    [Tooltip("EĞER JobType = GatherResource ise, NPC'lerin gideceği hedef " +
+             "(Üzerinde WorkSpotInteractable olmalı).")]
+    [SerializeField] private WorkSpotInteractable resourceTarget;
+    
+    [Tooltip("EĞER JobType = TransferResource ise, NPC'lerin gideceği hedef 'Ev'.")]
+    [SerializeField] private NpcHousing houseTarget;
+    
     [Tooltip("(Opsiyonel) NPC'lerin doğacağı ve döneceği nokta.")]
     [SerializeField] private Transform spawnPoint; 
     
-    // --- DEĞİŞİKLİK BAŞLANGICI (v2.1) ---
-    [Tooltip("(Opsiyonel) NPC'lerin işe giderken ve dönerken kullanacağı ara yol. " +
-             "Boş bırakılırsa, hedefe direkt giderler.")]
-    [SerializeField] private NpcPath optionalNpcPath; // <-- YENİ EKLENDİ
-    // --- DEĞİŞİKLİK SONU ---
-
-    [Header("Nüfus")]
-    [SerializeField] private int populationCount = 3;
-    [SerializeField] private float spawnInterval = 1.5f;
-
+    [Tooltip("(Opsiyonel) NPC'lerin kullanacağı ara yol.")]
+    [SerializeField] private NpcPath optionalNpcPath; 
+    
     [Header("Runtime İstatistikleri")]
+    [Tooltip("Bu evde toplanan/transfer edilen kaynak sayısı (sayaç).")]
     [SerializeField]
     private int tasksCompletedCounter = 0; 
     
+    // Enum (Değişiklik yok)
+    public enum NpcJobType { GatherResource, TransferResource }
+
+    // --- BU ALANLAR SİLİNDİ (DATA'YA TAŞINDI) ---
+    // [SerializeField] private GameObject genericNpcPrefab;
+    // [SerializeField] private FriendlyNpcData npcDataToSpawn;
+    // [SerializeField] private float restDuration = 3.0f;
+    // [SerializeField] private int populationCount = 3;
+    // [SerializeField] private float spawnInterval = 1.5f;
+    // --- ---
+
     
     private void Start()
     {
-        // Referans kontrolleri (Değişiklik yok)
-        if (genericNpcPrefab == null || npcDataToSpawn == null)
+        // 1. Gerekli referanslar atanmış mı?
+        // --- DEĞİŞİKLİK: 'housingData' kontrolü eklendi ---
+        if (housingData == null)
         {
-            Debug.LogError($"NpcHousing ({gameObject.name}): 'Prefab' veya 'Data' atanmamış.", this);
+            Debug.LogError($"NpcHousing ({gameObject.name}): 'Housing Data' atanmamış! " +
+                             "NPC spawn edilemez.", this);
             return;
         }
+        if (housingData.genericNpcPrefab == null || housingData.npcDataToSpawn == null)
+        {
+            Debug.LogError($"NpcHousing ({gameObject.name}): 'Housing Data' ({housingData.name}) " +
+                             "içindeki 'Prefab' veya 'Data' atanmamış.", this);
+            return;
+        }
+        // ---
+        
+        // 2. 'jobType'a göre hedef kontrolü (Değişiklik yok)
         if (jobType == NpcJobType.GatherResource && resourceTarget == null)
         {
             Debug.LogError($"NpcHousing ({gameObject.name}): JobType 'GatherResource' seçili " +
@@ -80,7 +106,6 @@ public class NpcHousing : MonoBehaviour
         Vector3 positionToSpawn = (spawnPoint != null) ? spawnPoint.position : transform.position;
         Transform homeTarget = (spawnPoint != null) ? spawnPoint : this.transform;
         
-        // NPC'nin gideceği hedef 'Transform'u 'jobType'a göre belirle
         Transform workTarget = null;
         if (jobType == NpcJobType.GatherResource)
         {
@@ -95,39 +120,44 @@ public class NpcHousing : MonoBehaviour
                 : houseTarget.transform;
         }
 
-        for (int i = 0; i < populationCount; i++)
+        // --- DEĞİŞİKLİK: Veriler 'housingData'dan okunuyor ---
+        for (int i = 0; i < housingData.populationCount; i++) // <-- DEĞİŞTİ
         {
+            // 1. NPC'yi YARAT (Data'dan okuyarak)
             GameObject npcGO = Instantiate(
-                genericNpcPrefab, 
+                housingData.genericNpcPrefab, // <-- DEĞİŞTİ
                 positionToSpawn,
                 Quaternion.identity
             );
+        // ---
 
             FriendlyNpcAI ai = npcGO.GetComponent<FriendlyNpcAI>();
             if (ai != null)
             {
-                // --- DEĞİŞİKLİK BAŞLANGICI (v2.1) ---
-                // 4. NPC'yi başlat! (Statları, Evi, İş Yerini VE OPSİYONEL YOLU ver)
-                ai.Initialize(npcDataToSpawn, homeTarget, workTarget, optionalNpcPath); 
-                // --- DEĞİŞİKLİK SONU ---
+                // 2. NPC'yi başlat! (Data'dan okuyarak)
+                // --- DEĞİŞİKLİK: 'housingData'dan okunuyor ---
+                ai.Initialize(housingData.npcDataToSpawn, homeTarget, workTarget, optionalNpcPath); // <-- DEĞİŞTİ
+                // ---
                 
-                // 5. Event'lere abone ol
                 ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
                 ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
             }
             else
             {
-                Debug.LogError($"'{genericNpcPrefab.name}' prefab'ında 'FriendlyNpcAI' script'i " +
-                               "bulunamadı!", genericNpcPrefab);
+                Debug.LogError($"'{housingData.genericNpcPrefab.name}' prefab'ında 'FriendlyNpcAI' script'i " +
+                               "bulunamadı!", housingData.genericNpcPrefab);
             }
 
-            yield return new WaitForSeconds(spawnInterval);
+            // 3. Bekle (Data'dan okuyarak)
+            // --- DEĞİŞİKLİK: 'housingData'dan okunuyor ---
+            yield return new WaitForSeconds(housingData.spawnInterval); // <-- DEĞİŞTİ
+            // ---
         }
     }
     
-    // --- BU METOTLARDA DEĞİŞİKLİK YOK ---
-    // (Beyin, NPC'nin nasıl gittiğiyle ilgilenmez,
-    // sadece vardığını ('OnArrived') bilmesi yeterlidir)
+    // --- BU METOTLARDA HİÇBİR DEĞİŞİKLİK YOK ---
+    // (Çünkü tüm mantıkları 'jobType', 'resourceTarget' ve 'houseTarget'a
+    // bağlı ve bu değişkenler zaten bu script'te kaldı)
     #region Event Handlers & Coroutines (No Change)
     
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
@@ -182,7 +212,9 @@ public class NpcHousing : MonoBehaviour
              Debug.Log($"Ev ({gameObject.name}): {npc.name} eli boş döndü. Dinleniyor...");
         }
 
-        StartCoroutine(RestCycle(npc));
+        // --- DEĞİŞİKLİK: 'housingData'dan okunuyor ---
+        StartCoroutine(RestCycle(npc, housingData.restDuration)); // <-- DEĞİŞTİ
+        // ---
     }
     
     private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity)
@@ -197,10 +229,13 @@ public class NpcHousing : MonoBehaviour
             npc.ReturnHome(capacity);
         }
     }
-    
-    private IEnumerator RestCycle(FriendlyNpcAI npc)
+
+    private IEnumerator RestCycle(FriendlyNpcAI npc, float duration)
     {
-        yield return new WaitForSeconds(restDuration);
+        // --- DEĞİŞİKLİK: 'housingData'dan okunuyor ---
+        yield return new WaitForSeconds(duration); // <-- DEĞİŞTİ
+        // ---
+        
         if(npc != null)
         {
             npc.GoToWork();
