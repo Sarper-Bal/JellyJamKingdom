@@ -103,11 +103,10 @@ GameObject:
   - component: {fileID: 8063991991785530743}
   - component: {fileID: 2347645663305997974}
   - component: {fileID: 8968468909950613264}
-  - component: {fileID: 6969309557155133232}
-  - component: {fileID: 5546728832623823812}
+  - component: {fileID: 584057605807608999}
   m_Layer: 6
-  m_Name: Enemy
-  m_TagString: Enemy
+  m_Name: NPC
+  m_TagString: NPC
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -172,7 +171,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
+  m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 112
@@ -194,13 +193,13 @@ CapsuleCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Radius: 0.52602446
   m_Height: 1.0520489
   m_Direction: 1
   m_Center: {x: -0.019098043, y: 0.43405586, z: -0.1569264}
---- !u!114 &6969309557155133232
+--- !u!114 &584057605807608999
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -209,23 +208,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2150025513644625521}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9e36f6d2e0ea0541bad29e784e0841b, type: 3}
+  m_Script: {fileID: 11500000, guid: 85aee3ac2efa94c7aa0644dd94b3ccac, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
-  isPlayer: 0
-  deathEffect: {fileID: 4806121257990350900, guid: 8ba56a88eb8db7342a07b8f07085b2f8, type: 3}
---- !u!114 &5546728832623823812
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2150025513644625521}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 04126beb49efb8c49a7ecc822750a0c7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendlyNpcAI
   spriteRenderer: {fileID: 4515059975710397565}
 --- !u!1 &8532340994753211982
 GameObject:

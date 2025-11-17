@@ -32,7 +32,7 @@ MonoBehaviour:
     isPeriodic: 1
     repeatInterval: 1
     hasFiniteDuration: 1
-    endTime: 10
+    endTime: 20
     count: 1
     spawnInterval: 1
   - enemyDataToSpawn: {fileID: 11400000, guid: 86c558070ad87409aa1eb2e7c9ad043f, type: 2}
