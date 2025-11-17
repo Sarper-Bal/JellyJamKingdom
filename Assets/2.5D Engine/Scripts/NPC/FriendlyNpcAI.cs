@@ -1,37 +1,32 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v1.8 (Kapasite Sistemi)
+ * DOST NPC YAPAY ZEKASI (MOTOR) - v1.9 (Opsiyonel Yol Takibi)
  *
- * * DEĞİŞİKLİKLER (v1.8):
- * - 'hasResourcePayload' (bool) alanı, 'currentPayloadAmount' (int)
- * olarak değiştirildi. Artık ne kadar kaynak taşıdığını biliyor.
- * - 'ReturnHome()' metodunun imzası 'ReturnHome(int collectedAmount)'
- * olarak değiştirildi. 'NpcHousing' tam olarak kaç kaynak
- * toplandığını bu metoda iletecek.
- * - 'OnArrivedAtHome' event'inin imzası değişti: 'Action<FriendlyNpcAI, int>'.
- * Artık eve vardığında 'NpcHousing'e taşıdığı kaynak miktarını
- * raporlar.
- * - 'ArrivedAtTarget()' metodu, 'OnArrivedAtHome' event'ini
- * 'currentPayloadAmount' ile tetikliyor.
- * - YENİ METOT: 'GetNpcData()' eklendi. 'NpcHousing'in bu NPC'nin
- * 'maxCarryCapacity' bilgisine erişebilmesi için gereklidir.
+ * * DEĞİŞİKLİKLER (v1.9):
+ * - Artık opsiyonel bir 'NpcPath' altyapısını destekliyor.
+ * - YENİ ALANLAR: 'currentPath', 'currentWaypointIndex', 'isMovingOnPath'.
+ * - 'Initialize()' metodu artık 4. parametre olarak 'NpcPath' alıyor.
+ * - 'GoToWork()' metodu güncellendi:
+ * - Eğer 'path' varsa, 'currentTarget'ı yolun ilk noktası (index 0) yapar.
+ * - Eğer 'path' yoksa, 'currentTarget'ı 'workSpot' yapar (eski sistem).
+ * - 'ReturnHome()' metodu güncellendi:
+ * - Eğer 'path' varsa, 'currentTarget'ı yolun SON noktası yapar (tersine).
+ * - Eğer 'path' yoksa, 'currentTarget'ı 'home' yapar (eski sistem).
+ * - 'ArrivedAtTarget()' metodu güncellendi:
+ * - Artık bir ara noktaya mı (waypoint) yoksa asıl hedefe mi
+ * vardığını kontrol ediyor.
+ * - Ara noktaya vardıysa, 'currentWaypointIndex'i artırır/azaltır
+ * ve bir sonraki noktayı hedefler.
+ * - Yol bittiğinde, asıl hedefi ('workSpot' veya 'home') hedefler.
+ * - Asıl hedefe vardığında event tetikler (eski sistem).
  */
 
 using UnityEngine;
 
 public class FriendlyNpcAI : MonoBehaviour
 {
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Event İmzası) ---
-    /// <summary>
-    /// NPC iş yerine (workSpot) ulaştığında tetiklenir.
-    /// </summary>
+    // Event'ler (v1.8 - Değişiklik yok)
     public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
-    
-    /// <summary>
-    /// NPC evine (homeTransform) ulaştığında tetiklenir.
-    /// 'int' parametresi, ne kadar kaynakla döndüğünü belirtir (0 = eli boş).
-    /// </summary>
     public event System.Action<FriendlyNpcAI, int> OnArrivedAtHome;
-    // --- DEĞİŞİKLİK SONU ---
 
     private enum State
     {
@@ -43,21 +38,22 @@ public class FriendlyNpcAI : MonoBehaviour
     [Header("Bileşen Referansları (Zorunlu)")]
     [SerializeField] private SpriteRenderer spriteRenderer; 
     
+    // Anlık (Runtime) Veriler
     private FriendlyNpcData npcData;
     private Transform homeTransform;
     private Transform workSpotTransform;
     
     private State currentState = State.Idle;
-    private Transform currentTarget;
-
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Kapasite) ---
-    /// <summary>
-    /// NPC'nin o an elinde taşıdığı kaynak miktarı.
-    /// </summary>
+    private Transform currentTarget; // O an hareket edilen hedef
     private int currentPayloadAmount = 0;
-    // private bool hasResourcePayload = false; // <-- SİLİNDİ
+
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Yol Takibi) ---
+    private NpcPath currentPath = null;    // Atanmışsa, takip edilecek yol
+    private int currentWaypointIndex = -1;   // Yoldaki mevcut index
+    private bool isMovingOnPath = false;  // Bir ara noktaya mı gidiyor?
     // --- DEĞİŞİKLİK SONU ---
     
+    // Optimize mesafe kontrolü (v1.6 - Değişiklik yok)
     private float sqrArrivalDistanceThreshold;
     private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f;
 
@@ -70,11 +66,13 @@ public class FriendlyNpcAI : MonoBehaviour
         sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD;
     }
 
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Yeni Initialize) ---
     /// <summary>
     /// 'NpcHousing' (Ev) tarafından NPC 'Instantiate' edildikten
     /// hemen sonra çağrılır.
     /// </summary>
-    public void Initialize(FriendlyNpcData data, Transform home, Transform workSpot)
+    /// <param name="path"> (Opsiyonel) Takip edilecek yol. 'null' ise direkt gider.</param>
+    public void Initialize(FriendlyNpcData data, Transform home, Transform workSpot, NpcPath path)
     {
         this.npcData = data;
         if (this.npcData == null)
@@ -86,27 +84,21 @@ public class FriendlyNpcAI : MonoBehaviour
         
         this.homeTransform = home;
         this.workSpotTransform = workSpot;
+        this.currentPath = path; // Opsiyonel yolu sakla
         this.currentState = State.Idle;
 
         InitializeVisuals();
         GoToWork(); // İlk komut
     }
+    // --- DEĞİŞİKLİK SONU ---
 
     private void InitializeVisuals()
     {
+        // ... (Değişiklik yok)
         if (npcData == null || spriteRenderer == null) return;
-        if (npcData.characterSprite != null)
-        {
-            spriteRenderer.sprite = npcData.characterSprite;
-        }
-        if (npcData.scale != Vector3.one && npcData.scale != Vector3.zero)
-        {
-            transform.localScale = npcData.scale;
-        }
-        else
-        {
-            transform.localScale = Vector3.one;
-        }
+        if (npcData.characterSprite != null) { spriteRenderer.sprite = npcData.characterSprite; }
+        if (npcData.scale != Vector3.one && npcData.scale != Vector3.zero) { transform.localScale = npcData.scale; }
+        else { transform.localScale = Vector3.one; }
     }
     
     private void Update()
@@ -133,79 +125,131 @@ public class FriendlyNpcAI : MonoBehaviour
             Time.deltaTime * npcData.speed
         );
 
-        // Optimize edilmiş mesafe kontrolü (v1.6)
         if ((transform.position - targetPositionOnGround).sqrMagnitude < sqrArrivalDistanceThreshold)
         {
             ArrivedAtTarget();
         }
     }
     
-    // --- DEĞİŞİKLİK BAŞLANGICI (v1.8 - Olay Tetikleyici) ---
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.9 - Yol Mantığı) ---
     /// <summary>
-    /// Hedefe ulaşıldığında çağrılır.
-    /// Eve vardığında yük (payload) miktarını raporlar.
+    /// Bir hedefe ulaşıldığında çağrılır.
+    /// Bu hedef bir ara nokta (waypoint) veya asıl hedef (ev/iş) olabilir.
     /// </summary>
     private void ArrivedAtTarget()
     {
-        State previousState = currentState;
-        currentState = State.Idle; // Hareketi durdur
-        
-        if (previousState == State.GoingToWork)
+        // 1. Bir ara noktayı mı takip ediyorduk?
+        if (isMovingOnPath)
         {
-            // "İş yerine vardım!"
-            OnArrivedAtWork?.Invoke(this);
+            if (currentState == State.GoingToWork)
+            {
+                // İşe giderken bir ara noktaya vardık
+                currentWaypointIndex++; // Bir sonraki indekse geç
+                
+                // Takip edecek daha fazla nokta var mı?
+                if (currentWaypointIndex < currentPath.waypoints.Length)
+                {
+                    // Evet, bir sonraki noktayı hedefle
+                    currentTarget = currentPath.waypoints[currentWaypointIndex];
+                }
+                else
+                {
+                    // Hayır, yol bitti. Artık asıl 'iş' hedefine git
+                    isMovingOnPath = false;
+                    currentTarget = workSpotTransform;
+                }
+            }
+            else // (currentState == State.ReturningHome)
+            {
+                // Eve dönerken bir ara noktaya vardık
+                currentWaypointIndex--; // Bir önceki indekse geç (tersine)
+                
+                // Takip edecek daha fazla nokta var mı?
+                if (currentWaypointIndex >= 0)
+                {
+                    // Evet, bir önceki noktayı hedefle
+                    currentTarget = currentPath.waypoints[currentWaypointIndex];
+                }
+                else
+                {
+                    // Hayır, yol bitti. Artık asıl 'ev' hedefine git
+                    isMovingOnPath = false;
+                    currentTarget = homeTransform;
+                }
+            }
         }
-        else if (previousState == State.ReturningHome)
+        // 2. Bir ara noktayı değil, asıl hedefi takip ediyorduk
+        else
         {
-            // "Eve vardım!" (Taşıdığı miktarı raporla)
-            OnArrivedAtHome?.Invoke(this, currentPayloadAmount);
+            // Asıl hedefe vardık.
+            State previousState = currentState;
+            currentState = State.Idle; // Hareketi durdur
+            
+            if (previousState == State.GoingToWork)
+            {
+                OnArrivedAtWork?.Invoke(this);
+            }
+            else if (previousState == State.ReturningHome)
+            {
+                OnArrivedAtHome?.Invoke(this, currentPayloadAmount);
+            }
         }
     }
 
-    // --- Komut Metotları (v1.8) ---
+    // --- Komut Metotları (v1.9 - Yol Mantığı) ---
     
-    /// <summary>
-    /// NpcHousing'den "İşe Git" komutu alır
-    /// </summary>
     public void GoToWork()
     {
-        currentPayloadAmount = 0; // İşe giderken elin boş (0 kaynak)
+        currentPayloadAmount = 0; 
         currentState = State.GoingToWork;
-        currentTarget = workSpotTransform;
+
+        // Atanmış bir yol var mı?
+        if (currentPath != null && currentPath.waypoints.Length > 0)
+        {
+            isMovingOnPath = true;
+            currentWaypointIndex = 0; // Baştan başla
+            currentTarget = currentPath.waypoints[currentWaypointIndex];
+        }
+        else
+        {
+            // Yol yok, direkt hedefe git
+            isMovingOnPath = false;
+            currentTarget = workSpotTransform;
+        }
     }
 
-    /// <summary>
-    /// NpcHousing'den "Eve Dön" komutu alır
-    /// </summary>
-    /// <param name="collectedAmount">NPC'nin ne kadar kaynak topladığı</param>
     public void ReturnHome(int collectedAmount)
     {
-        currentPayloadAmount = collectedAmount; // Kaynak miktarını ayarla (0 olabilir)
+        currentPayloadAmount = collectedAmount;
         currentState = State.ReturningHome;
-        currentTarget = homeTransform;
+
+        // Atanmış bir yol var mı?
+        if (currentPath != null && currentPath.waypoints.Length > 0)
+        {
+            isMovingOnPath = true;
+            currentWaypointIndex = currentPath.waypoints.Length - 1; // Sondan başla
+            currentTarget = currentPath.waypoints[currentWaypointIndex];
+        }
+        else
+        {
+            // Yol yok, direkt hedefe git
+            isMovingOnPath = false;
+            currentTarget = homeTransform;
+        }
     }
+    // --- DEĞİŞİKLİK SONU ---
     
-    /// <summary>
-    /// 'NpcHousing'in bu NPC'nin 'maxCarryCapacity'
-    /// gibi verilerine erişmesini sağlar.
-    /// </summary>
     public FriendlyNpcData GetNpcData()
     {
         return npcData;
     }
-    // --- DEĞİŞİKLİK SONU ---
     
     private void FlipSprite(bool faceLeft)
     {
+        // ... (Değişiklik yok)
         Vector3 baseScale = Vector3.one;
         if (npcData != null) { baseScale = npcData.scale; }
-        if (faceLeft)
-        {
-            transform.localScale = new Vector3(-Mathf.Abs(baseScale.x), baseScale.y, baseScale.z);
-        }
-        else
-        {
-            transform.localScale = new Vector3(Mathf.Abs(baseScale.x), baseScale.y, baseScale.z);
-        }
+        if (faceLeft) { transform.localScale = new Vector3(-Mathf.Abs(baseScale.x), baseScale.y, baseScale.z); }
+        else { transform.localScale = new Vector3(Mathf.Abs(baseScale.x), baseScale.y, baseScale.z); }
     }
 }
