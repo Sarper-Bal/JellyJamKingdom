@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 727b7976ef4e148b8ac7890f32fc0495, type: 3}
   m_Name: DefaultEnemyStats_Path
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
-  maxHealth: 10
+  maxHealth: 20
   speed: 3
   damageAmount: 10
   characterSprite: {fileID: 21300000, guid: ecd075a24199a2b4fba49ceb7c3f4860, type: 3}
