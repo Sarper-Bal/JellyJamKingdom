@@ -1,20 +1,34 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v1.3 (Havuzlama OLMADAN)
+ * DOST NPC YAPAY ZEKASI (MOTOR) - v1.4 (Event-Driven)
  *
- * * DEĞİŞİKLİKLER (v1.3):
- * - ': IPooledObject' arayüzü kaldırıldı.
- * - 'PoolTag' propertysi kaldırıldı.
- * - 'OnObjectSpawn()' metodu kaldırıldı.
- * - Başlatma mantığı ('InitializeVisuals' ve 'GoToWork')
- * zaten 'Initialize' metodu içindeydi (v1.2'deki düzeltme),
- * bu yüzden 'Start()' metodunda da çalışacaktır.
+ * * DEĞİŞİKLİKLER (v1.4):
+ * - Bu script artık "düşünen" taraf değil, sadece "yapan" taraf (Motor).
+ * - 'ArrivedAtTarget' metodu artık kendi kendine karar vermiyor.
+ * - 'OnArrivedAtWork' ve 'OnArrivedAtHome' adında iki YENİ event (olay) eklendi.
+ * - 'ArrivedAtTarget' metodu, 'currentState'i 'Idle' yapar ve ilgili event'i
+ * tetikler ('NpcHousing'in duyması için).
+ * - 'GoToWork' ve 'ReturnHome' metotları 'NpcHousing'in
+ * komut verebilmesi için 'public' yapıldı.
  */
 
 using UnityEngine;
 
-// ': IPooledObject' kaldırıldı
 public class FriendlyNpcAI : MonoBehaviour
 {
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.4 - Event'ler) ---
+    /// <summary>
+    /// NPC iş yerine (workSpot) ulaştığında tetiklenir.
+    /// 'NpcHousing' bu olayı dinler.
+    /// </summary>
+    public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
+    
+    /// <summary>
+    /// NPC evine (homeTransform) ulaştığında tetiklenir.
+    /// 'NpcHousing' bu olayı dinler.
+    /// </summary>
+    public event System.Action<FriendlyNpcAI> OnArrivedAtHome;
+    // --- DEĞİŞİKLİK SONU ---
+
     private enum State
     {
         Idle,
@@ -25,18 +39,14 @@ public class FriendlyNpcAI : MonoBehaviour
     [Header("Bileşen Referansları (Zorunlu)")]
     [SerializeField] private SpriteRenderer spriteRenderer; 
     
-    // Anlık (Runtime) Veriler
     private FriendlyNpcData npcData;
     private Transform homeTransform;
     private Transform workSpotTransform;
     
     private State currentState = State.Idle;
     private Transform currentTarget;
-
-    // --- IPooledObject Arayüzü KALDIRILDI ---
-    // public string PoolTag { get; set; }
-    // public void OnObjectSpawn() { }
-    // --- ---
+    
+    // Not: Havuzlama (Pooling) kodları isteğiniz üzerine kaldırılmıştı.
 
     private void Awake()
     {
@@ -52,7 +62,6 @@ public class FriendlyNpcAI : MonoBehaviour
     /// </summary>
     public void Initialize(FriendlyNpcData data, Transform home, Transform workSpot)
     {
-        // 1. Veriyi al
         this.npcData = data;
         if (this.npcData == null)
         {
@@ -61,30 +70,24 @@ public class FriendlyNpcAI : MonoBehaviour
             return;
         }
         
-        // 2. Hedefleri al
         this.homeTransform = home;
         this.workSpotTransform = workSpot;
         this.currentState = State.Idle;
 
-        // 3. Görselleri ayarla
+        // Görselleri ayarla
         InitializeVisuals();
         
-        // 4. Hareketi başlat
+        // Hareketi başlat (İlk komut)
         GoToWork();
     }
 
-    /// <summary>
-    /// Veriye göre görselleri ayarlar
-    /// </summary>
     private void InitializeVisuals()
     {
         if (npcData == null || spriteRenderer == null) return;
-
         if (npcData.characterSprite != null)
         {
             spriteRenderer.sprite = npcData.characterSprite;
         }
-
         if (npcData.scale != Vector3.one && npcData.scale != Vector3.zero)
         {
             transform.localScale = npcData.scale;
@@ -97,18 +100,18 @@ public class FriendlyNpcAI : MonoBehaviour
     
     private void Update()
     {
+        // Sadece hareket durumlarındayken çalış
         if (currentState == State.Idle || currentTarget == null || npcData == null)
         {
             return;
         }
-
-        // 2.5D Hareket Mantığı (Y-Eksenini kilitle)
+        
         Vector3 targetPositionOnGround = new Vector3(
             currentTarget.position.x, 
             transform.position.y,
             currentTarget.position.z
         );
-
+        
         if (targetPositionOnGround.x > transform.position.x)
             FlipSprite(false); 
         else if (targetPositionOnGround.x < transform.position.x)
@@ -122,45 +125,60 @@ public class FriendlyNpcAI : MonoBehaviour
 
         if (Vector3.Distance(transform.position, targetPositionOnGround) < 0.1f)
         {
+            // Hedefe ulaşıldı
             ArrivedAtTarget();
         }
     }
     
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.4 - Olay Tetikleyici) ---
+    /// <summary>
+    /// Hedefe ulaşıldığında çağrılır.
+    /// Artık kendi kendine karar vermiyor, sadece "Beyin"e (NpcHousing)
+    /// rapor veriyor.
+    /// </summary>
     private void ArrivedAtTarget()
     {
-        if (currentState == State.GoingToWork)
+        State previousState = currentState;
+        currentState = State.Idle; // Hareketi durdur
+        
+        if (previousState == State.GoingToWork)
         {
-            ReturnHome();
+            // "İş yerine vardım!" diye event tetikle
+            OnArrivedAtWork?.Invoke(this);
         }
-        else if (currentState == State.ReturningHome)
+        else if (previousState == State.ReturningHome)
         {
-            // Şimdilik basit döngü: Eve varınca tekrar işe git
-            GoToWork();
+            // "Eve vardım!" diye event tetikle
+            OnArrivedAtHome?.Invoke(this);
         }
     }
 
-    // --- Komut Metotları ---
-    private void GoToWork()
+    // --- Komut Metotları (Artık 'public') ---
+    
+    /// <summary>
+    /// NpcHousing'den "İşe Git" komutu alır
+    /// </summary>
+    public void GoToWork()
     {
         currentState = State.GoingToWork;
         currentTarget = workSpotTransform;
     }
 
-    private void ReturnHome()
+    /// <summary>
+    /// NpcHousing'den "Eve Dön" komutu alır
+    /// </summary>
+    public void ReturnHome()
     {
         currentState = State.ReturningHome;
         currentTarget = homeTransform;
     }
+    // --- DEĞİŞİKLİK SONU ---
     
-    // Scale-uyumlu Flip metodu
+    // Scale-uyumlu Flip metodu (Değişiklik yok)
     private void FlipSprite(bool faceLeft)
     {
         Vector3 baseScale = Vector3.one;
-        if (npcData != null)
-        {
-            baseScale = npcData.scale;
-        }
-
+        if (npcData != null) { baseScale = npcData.scale; }
         if (faceLeft)
         {
             transform.localScale = new Vector3(-Mathf.Abs(baseScale.x), baseScale.y, baseScale.z);
