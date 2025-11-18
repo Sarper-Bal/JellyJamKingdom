@@ -1,9 +1,10 @@
 /*
- * NPC EVİ (BEYİN/YÖNETİCİ) - v3.5 (Hata Düzeltmesi)
+ * NPC EVİ (BEYİN/YÖNETİCİ) - v3.6 (Spawn Point Erişimi)
  *
- * * DÜZELTME:
- * - 'GetResourceCount()' metodu eklendi. (CS1061 Hatası Çözümü)
- * - Bu metot sayesinde 'SiloController' bu evde kaç kaynak olduğunu okuyabilir.
+ * * DEĞİŞİKLİKLER (v3.6):
+ * - YENİ METOT: 'GetSpawnPoint()'.
+ * - Bu public metot, Silo gibi dış sistemlerin evin "kapı önü" (spawnPoint)
+ * - noktasına erişmesini sağlar. Eğer spawnPoint atanmamışsa, evin merkezini döner.
  */
 
 using UnityEngine;
@@ -12,7 +13,6 @@ using System.Collections.Generic;
 
 public class NpcHousing : MonoBehaviour
 {
-    // --- Veri ve Referans Alanları ---
     [Header("Veri Kaynağı (ZORUNLU)")]
     [SerializeField] private NpcHousingData housingData;
     
@@ -22,7 +22,6 @@ public class NpcHousing : MonoBehaviour
     [Header("Sahne Hedefleri (Prefab Üzerinde)")]
     [SerializeField] private WorkSpotInteractable resourceTarget;
     
-    // Silo'nun hedefi değiştirebilmesi için public
     [Tooltip("EĞER JobType = TransferResource ise, NPC'lerin gideceği hedef 'Ev'.")]
     [SerializeField] public NpcHousing houseTarget; 
     
@@ -35,7 +34,6 @@ public class NpcHousing : MonoBehaviour
     
     public enum NpcJobType { GatherResource, TransferResource }
     
-    // Silo için Event
     public event System.Action<FriendlyNpcAI, NpcHousing> OnNpcReadyToWork;
 
     private List<FriendlyNpcAI> managedNpcs = new List<FriendlyNpcAI>();
@@ -43,8 +41,6 @@ public class NpcHousing : MonoBehaviour
     private void Start()
     {
         if (housingData == null) return;
-        // Diğer null kontrolleri...
-        
         StartCoroutine(SpawnNpcs());
     }
 
@@ -64,16 +60,10 @@ public class NpcHousing : MonoBehaviour
 
             if (ai != null)
             {
-                // 1. Silo'ya (varsa) haber ver
                 OnNpcReadyToWork?.Invoke(ai, this);
-                
-                // 2. Hedefleri belirle
                 Transform workTarget = DetermineWorkTarget();
-                
-                // 3. Başlat
                 ai.Activate(housingData.npcDataToSpawn, homeTarget, workTarget, optionalNpcPath); 
                 
-                // 4. Abone ol
                 ai.OnArrivedAtWork -= HandleNpcArrivedAtWork; 
                 ai.OnArrivedAtHome -= HandleNpcArrivedAtHome;
                 ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
@@ -95,9 +85,9 @@ public class NpcHousing : MonoBehaviour
         }
         else if (jobType == NpcJobType.TransferResource && houseTarget != null)
         {
-            return (houseTarget.spawnPoint != null) 
-                ? houseTarget.spawnPoint 
-                : houseTarget.transform;
+            // Kendi sınıfımız olduğu için private alana erişebiliyoruz ama
+            // dışarıdan erişim için GetSpawnPoint kullanmak daha güvenlidir.
+            return houseTarget.GetSpawnPoint();
         }
         return transform; 
     }
@@ -108,7 +98,6 @@ public class NpcHousing : MonoBehaviour
         
         if(npc != null)
         {
-            // Dinlenme bitti, Silo'ya haber ver ve tekrar yola koyul
             OnNpcReadyToWork?.Invoke(npc, this);
             Transform newWorkTarget = DetermineWorkTarget();
             
@@ -154,21 +143,23 @@ public class NpcHousing : MonoBehaviour
         if(npc != null) npc.ReturnHome(capacity);
     }
     
-    // --- PUBLIC METOTLAR (Silo ve NpcPooler için) ---
+    // --- PUBLIC METOTLAR ---
     
     public NpcHousingData GetHousingData() { return housingData; }
+    public int GetResourceCount() { return tasksCompletedCounter; }
 
-    // --- EKSİK OLAN METOT BUYDU ---
-    public int GetResourceCount() 
-    { 
-        return tasksCompletedCounter; 
+    // --- DEĞİŞİKLİK BAŞLANGICI (v3.6 - Yeni Erişim Metodu) ---
+    /// <summary>
+    /// Silo veya diğer sistemlerin bu evin "kapı önü" noktasına erişmesi için.
+    /// </summary>
+    public Transform GetSpawnPoint()
+    {
+        // Eğer spawnPoint atanmışsa onu dön, yoksa evin merkezini dön
+        return (spawnPoint != null) ? spawnPoint : transform;
     }
-    // ------------------------------
+    // --- DEĞİŞİKLİK SONU ---
 
-    public void IncreaseCounter(int amount) 
-    { 
-        tasksCompletedCounter += amount; 
-    }
+    public void IncreaseCounter(int amount) { tasksCompletedCounter += amount; }
 
     public int DecreaseCounter(int amountToTake)
     {
