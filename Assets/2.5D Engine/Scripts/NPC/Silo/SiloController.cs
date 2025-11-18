@@ -1,10 +1,10 @@
 /*
- * SILO KONTROLCÜSÜ - v3.2 (Hata Düzeltmesi & Tam ResourceData Entegrasyonu)
+ * SILO KONTROLCÜSÜ - v3.4 (Hata Çözümü & Stabilizasyon)
  *
  * * HATA DÜZELTMESİ (CS0246):
- * - Kodun içindeki tüm 'ResourceType' (eski Enum) referansları temizlendi.
- * - Yerine 'ResourceData' (ScriptableObject) getirildi.
- * - 'HandleWorkerArrivedAtTarget' metodunda 'GetProducedResource()' çağrısı düzeltildi.
+ * - 'IncreaseCounter(ResourceData, int)' metodu eklendi.
+ * - Silo'nun NPC'leri emekli ettiğinde (RetireWorker) 'UpdateInventoryDisplay' metodundaki
+ * 'totalStoredResources' sayacını güncellemeyi unutmuştuk, o kısım da eklendi.
  */
 
 using UnityEngine;
@@ -22,7 +22,6 @@ public class SiloController : MonoBehaviour
         public int collectedAmount;
     }
 
-    // Envanter artık ResourceData (Asset) tabanlı
     [System.Serializable]
     public class SiloInventoryEntry
     {
@@ -42,12 +41,15 @@ public class SiloController : MonoBehaviour
     [Header("Silo Envanteri")]
     [SerializeField] private List<SiloInventoryEntry> inventoryDisplay = new List<SiloInventoryEntry>();
     
-    // Sözlük anahtarı ResourceData (Asset) oldu
     private Dictionary<ResourceData, int> siloInventory = new Dictionary<ResourceData, int>();
 
     [Header("İzleme")]
     [SerializeField] private int currentActiveWorkers = 0;
     [SerializeField] private int resourcesWaitingToBeCollected = 0;
+    
+    // --- DEĞİŞİKLİK: totalStoredResources buradaydı. Private yapalım ve Inspector'da göstermeyelim ---
+    private int totalStoredResources = 0; // Toplam tutarı kod içinde tutarız.
+    // ---
 
     private List<FriendlyNpcAI> activeWorkers = new List<FriendlyNpcAI>();
     private Dictionary<FriendlyNpcAI, SiloTargetData> workerAssignments = new Dictionary<FriendlyNpcAI, SiloTargetData>();
@@ -72,13 +74,7 @@ public class SiloController : MonoBehaviour
     {
         resourcesWaitingToBeCollected = 0;
         if (targets == null) return;
-        foreach (var t in targets)
-        {
-            if (t.house != null)
-            {
-                resourcesWaitingToBeCollected += t.house.GetResourceCount();
-            }
-        }
+        foreach (var t in targets) { if (t.house != null) resourcesWaitingToBeCollected += t.house.GetResourceCount(); }
     }
     
     private void ManageWorkforce()
@@ -137,47 +133,28 @@ public class SiloController : MonoBehaviour
         npc.Activate(siloData.npcDataToSpawn, home, dest, path);
     }
 
-    // --- DÜZELTME BURADA ---
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
     {
         SiloTargetData data = workerAssignments.ContainsKey(npc) ? workerAssignments[npc] : null;
         int collected = 0;
-        
-        // ResourceType yerine ResourceData kullanıyoruz
         ResourceData resource = null;
 
         if (data != null && data.house != null)
         {
             int cap = npc.GetNpcData().maxCarryCapacity;
             collected = data.house.DecreaseCounter(cap);
-            
-            if (collected > 0)
-            {
-                // Evden üretilen kaynağın verisini (Asset) al
-                resource = data.house.GetProducedResource();
-            }
+            if (collected > 0) resource = data.house.GetProducedResource();
         }
         
-        // NPC'ye dönüş emrini, toplanan miktar ve kaynak verisiyle ver
         npc.ReturnHome(collected, resource);
     }
-    // -----------------------
 
     private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceData resource)
     {
         if (amount > 0 && resource != null)
         {
-            // Sözlüğe ekle
-            if (siloInventory.ContainsKey(resource)) siloInventory[resource] += amount;
-            else siloInventory.Add(resource, amount);
-
-            // İstatistikleri güncelle
-            if (workerAssignments.ContainsKey(npc))
-            {
-                workerAssignments[npc].collectedAmount += amount;
-            }
-            
-            UpdateInventoryDisplay();
+            // Kaynak toplandı, envantere ekle
+            IncreaseCounter(resource, amount);
         }
 
         // İşçi yönetimi
@@ -196,12 +173,16 @@ public class SiloController : MonoBehaviour
         }
     }
     
+    // Silo envanterini güncelleyen yardımcı metot
     private void UpdateInventoryDisplay()
     {
         inventoryDisplay.Clear();
+        // --- DÜZELTME: totalStoredResources burada hesaplanmalı ---
+        totalStoredResources = 0; 
         foreach (var kvp in siloInventory)
         {
             inventoryDisplay.Add(new SiloInventoryEntry { resource = kvp.Key, amount = kvp.Value });
+            totalStoredResources += kvp.Value;
         }
     }
 
@@ -223,9 +204,48 @@ public class SiloController : MonoBehaviour
         if (npc.gameObject.activeInHierarchy) SendWorkerToBestTarget(npc);
     }
     
+    private NpcHousing GetClosestHouse(Vector3 position)
+    {
+        // ... (Bu metot aynı)
+        NpcHousing closest = null;
+        float minDst = Mathf.Infinity;
+        if (targets == null) return null;
+        
+        foreach (var targetData in targets)
+        {
+            if (targetData.house == null) continue;
+            float dst = Vector3.Distance(position, targetData.house.transform.position);
+            if (dst < minDst && dst < 5.0f) 
+            {
+                minDst = dst;
+                closest = targetData.house;
+            }
+        }
+        return closest;
+    }
+    
     public SiloData GetSiloData() { return siloData; }
     
-    // --- Market Desteği İçin ---
+    // --- EKLENEN PUBLIC METOTLAR ---
+    
+    /// <summary>
+    /// Marketlerin (veya Market NPC'lerinin iade etmek istediği) kaynakları kabul eder.
+    /// </summary>
+    public void IncreaseCounter(ResourceData resource, int amount)
+    {
+        if (resource == null || amount <= 0) return;
+
+        // Envantere ekle
+        if (siloInventory.ContainsKey(resource)) siloInventory[resource] += amount;
+        else siloInventory.Add(resource, amount);
+        
+        // Görsel listeyi güncelle
+        UpdateInventoryDisplay();
+    }
+
+    /// <summary>
+    /// Marketlerin (veya başka yapıların) Silo'dan kaynak çekmesini sağlar.
+    /// </summary>
     public int TakeResource(ResourceData resource, int amountToTake)
     {
         if (resource == null || !siloInventory.ContainsKey(resource))
@@ -238,7 +258,9 @@ public class SiloController : MonoBehaviour
         
         siloInventory[resource] -= actualAmountGiven;
         
+        // Görsel listeyi güncelle
         UpdateInventoryDisplay();
+
         return actualAmountGiven;
     }
 

@@ -1,16 +1,10 @@
 /*
- * MARKET KONTROLCÜSÜ - v3.0 (Talep Üzerine Tek Sipariş)
+ * MARKET KONTROLCÜSÜ - v4.0 (Talep Üzerine Tek Sipariş)
  * * GÖREVİ:
- * - Müşteri geldiğinde NPC'yi Silo'ya gönderir.
- * - NPC geri döndüğünde, bekleyen müşteriye hizmet verir.
+ * - Stoksuz "Just-In-Time" tedarik yönetimi.
+ * - Müşterinin siparişini (Görev Fişi) NPC'ye atar.
  *
- * * DEĞİŞİKLİKLER (v3.0):
- * - 'SalesRoutine', 'LogisticsRoutine' ve 'currentStock' SİLİNDİ.
- * - YENİ HAFIZA: 'workerAssignments' Sözlüğü, hangi NPC'nin hangi müşteriye
- * hizmet verdiğini tutar.
- * - 'HandleWorkerArrivedAtSilo' artık Silo'dan müşterinin istediği ürünü çeker.
- * - 'HandleWorkerReturnedToMarket' ürünü müşteriye teslim eder ve müşteriyi gönderir.
- * - 'TryBuyItem' metodu kaldırıldı, çünkü 'AttendToCustomer' ile kuyruk yönetimi yapılıyor.
+ * * HATA DÜZELTMESİ (CS1061): 'OnArrivedAtShop' -> 'OnArrivedAtWork' düzeltmesi içerir.
  */
 
 using UnityEngine;
@@ -27,14 +21,8 @@ public class MarketController : MonoBehaviour
     [SerializeField] private NpcPath optionalPath;
 
     [Header("Konumlandırma")]
-    [Tooltip("Market NPC'lerinin doğacağı yer ve Müşterinin duracağı yer.")]
     [SerializeField] private Transform spawnPoint; 
 
-    // --- DEĞİŞİKLİK BAŞLANGICI (v3.0) ---
-    // Stok takibi kaldırıldı.
-    // [SerializeField] private int currentStock = 0; // SİLİNDİ
-    // --- DEĞİŞİKLİK SONU ---
-    
     [Header("Lojistik Takibi")]
     [SerializeField] private int currentActiveWorkers = 0;
 
@@ -43,7 +31,7 @@ public class MarketController : MonoBehaviour
     private Queue<FriendlyNpcAI> idleWorkers = new Queue<FriendlyNpcAI>(); 
     private Queue<CustomerAI> customerQueue = new Queue<CustomerAI>();
 
-    // Hangi işçi hangi müşteriye hizmet veriyor? (Görev fişi)
+    // Hangi NPC hangi müşteriye hizmet veriyor? (Görev fişi)
     private Dictionary<FriendlyNpcAI, CustomerAI> workerCustomerAssignments = 
         new Dictionary<FriendlyNpcAI, CustomerAI>();
 
@@ -52,12 +40,9 @@ public class MarketController : MonoBehaviour
     {
         if (marketData == null || targetSilo == null) return;
         
-        // Satış ve Stok rutini kaldırıldı.
-        // StartCoroutine(SalesRoutine()); 
-        StartCoroutine(SpawnBatch(marketData.populationCount)); // Market NPC'lerini başlat
-        
-        // Kuyruk kontrolü hemen başlasın.
-        StartCoroutine(LogisticsRoutine());
+        // Satış Rutini kaldırıldı
+        StartCoroutine(SpawnBatch(marketData.populationCount)); 
+        StartCoroutine(LogisticsRoutine()); // Kuyruk kontrolü hemen başlasın.
     }
     
     private IEnumerator LogisticsRoutine()
@@ -76,6 +61,7 @@ public class MarketController : MonoBehaviour
     /// </summary>
     public void AttendToCustomer(CustomerAI customer)
     {
+        // NPC'ye ihtiyaç var mı? Önce kuyruğa ekle
         customerQueue.Enqueue(customer);
         ProcessQueue();
     }
@@ -88,10 +74,10 @@ public class MarketController : MonoBehaviour
         // 1. Müşteri ve Boşta NPC var mı?
         if (customerQueue.Count > 0 && idleWorkers.Count > 0)
         {
-            CustomerAI customer = customerQueue.Dequeue(); // Müşteriyi al
-            FriendlyNpcAI worker = idleWorkers.Dequeue(); // NPC'yi al
+            CustomerAI customer = customerQueue.Peek(); // Müşteriyi al (kuyruktan çıkarma)
+            FriendlyNpcAI worker = idleWorkers.Dequeue(); // Boşta NPC'yi al
             
-            // 2. Görev Fişini Oluştur
+            // 2. Görev Fişini Oluştur (Bu NPC bu müşterinin işini yapıyor)
             workerCustomerAssignments.Add(worker, customer);
             
             // 3. NPC'yi Silo'ya gönder
@@ -115,7 +101,7 @@ public class MarketController : MonoBehaviour
                 activeWorkers.Add(npc);
                 currentActiveWorkers = activeWorkers.Count;
                 
-                idleWorkers.Enqueue(npc); // Başlangıçta boşta
+                idleWorkers.Enqueue(npc); 
                 
                 npc.OnArrivedAtWork += HandleWorkerArrivedAtSilo;
                 npc.OnArrivedAtHome += HandleWorkerReturnedToMarket;
@@ -136,7 +122,7 @@ public class MarketController : MonoBehaviour
         Transform siloDest = targetSilo.GetSpawnPoint();
 
         // NPC'ye, müşterinin istediği ürünü getirme komutu veriliyor.
-        // NPC'nin 'Activate' metodu, Target'ı Silo olarak biliyor.
+        // NPC'nin 'Activate' metoduna Silo'yu hedef olarak veriyoruz.
         npc.Activate(marketData.npcDataToSpawn, myHome, siloDest, optionalPath);
     }
 
@@ -165,29 +151,41 @@ public class MarketController : MonoBehaviour
         if (!workerCustomerAssignments.TryGetValue(npc, out CustomerAI customer))
         {
             // Fiş kaybolmuş (olmamalı), NPC'yi dinlenmeye gönder.
-            // Debug.LogWarning("Market: Dönen NPC'nin görev fişi yok.");
             StartCoroutine(RestAndRestart(npc));
             return;
         }
-
+        
         // 2. Teslimat
         if (amount >= customer.data.purchaseAmount)
         {
-            // A) Başarılı Teslimat: Müşterinin istediği kadarını NPC getirdi.
-            Debug.Log($"Market: {customer.name} {resource.resourceName}'i satın aldı. Teslimat başarılı.");
+            // A) BAŞARILI Teslimat: Müşteriye ürün teslim edildi.
             
-            // 3. Müşteriyi gönder
+            // 3. Müşteriye malı ver ve gönder
             customer.LeaveShop(); 
+            customerQueue.Dequeue(); // Kuyruktan tamamen çıkar
             
-            // 4. Müşterinin görev fişini sil
+            // 4. NPC'den fişi sil
             workerCustomerAssignments.Remove(npc);
+            
+            Debug.Log($"Market: {customer.data.resourceToBuy.resourceName} satıldı. Müşteri ayrılıyor.");
         }
         else
         {
-            // B) Başarısız Teslimat: Stokta yoktu, NPC az getirdi veya eli boş döndü.
-            Debug.Log($"Market: Ürün ({resource.name}) yetmedi! Müşteri üzgün ayrılıyor.");
+            // B) BAŞARISIZ Teslimat: Stokta yoktu, NPC az getirdi veya eli boş döndü.
+            // Bu durumda, Market NPC'si getirdiği ürünü (amount) iade etmeli.
+            
+            // 3. Silo'ya kalan ürünü iade et
+            if (amount > 0)
+            {
+                 targetSilo.IncreaseCounter(resource, amount);
+            }
+            
+            // 4. Müşteriyi gönder (satış yapılamadı)
             customer.LeaveShop(); 
+            customerQueue.Dequeue();
             workerCustomerAssignments.Remove(npc);
+
+            Debug.Log($"Market: {customer.data.resourceToBuy.resourceName} yetmedi! Müşteri üzgün ayrılıyor. {amount} ürün iade edildi.");
         }
 
         // 5. NPC'yi dinlenmeye gönder
@@ -197,10 +195,12 @@ public class MarketController : MonoBehaviour
     private IEnumerator RestAndRestart(FriendlyNpcAI npc)
     {
         yield return new WaitForSeconds(marketData.restDuration);
+        
         idleWorkers.Enqueue(npc);
         ProcessQueue();
     }
     
+    // --- MÜŞTERİ SİSTEMİ İÇİN ERİŞİM METOTLARI ---
     public Transform GetInteractionPoint()
     {
         return (spawnPoint != null) ? spawnPoint : transform;

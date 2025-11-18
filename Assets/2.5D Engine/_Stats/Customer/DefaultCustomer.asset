@@ -15,4 +15,5 @@ MonoBehaviour:
   characterSprite: {fileID: 21300000, guid: e969a29cef51b084fafbdb381f35a65e, type: 3}
   scale: {x: 1, y: 1, z: 1}
   speed: 2.5
-  purchaseAmount: 1
+  purchaseAmount: 2
+  resourceToBuy: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
