@@ -1,6 +1,7 @@
 /*
- * MÜŞTERİ VERİSİ
- * GÖREVİ: Müşterinin görselini, hızını ve alım gücünü tutar.
+ * MÜŞTERİ VERİSİ - v1.1 (Talep Bilgisi)
+ * * DEĞİŞİKLİKLER:
+ * - 'resourceToBuy' (ResourceData) eklendi.
  */
 
 using UnityEngine;
@@ -18,4 +19,9 @@ public class CustomerData : ScriptableObject
     [Header("Ekonomi")]
     [Tooltip("Müşterinin tek seferde kaç adet ürün almak istediği.")]
     public int purchaseAmount = 1;
+    
+    // --- DEĞİŞİKLİK BAŞLANGICI ---
+    [Tooltip("Müşterinin satın almak istediği kaynak tipi.")]
+    public ResourceData resourceToBuy; // <-- YENİ EKLENDİ
+    // --- DEĞİŞİKLİK SONU ---
 }
