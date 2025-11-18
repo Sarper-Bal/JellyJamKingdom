@@ -1,8 +1,10 @@
 /*
- * SILO KONTROLCÜSÜ - v3.1 (ResourceData Envanteri)
- * DEĞİŞİKLİKLER:
- * - 'SiloInventoryEntry' artık 'ResourceData' tutuyor.
- * - 'siloInventory' sözlüğü 'Dictionary<ResourceData, int>' oldu.
+ * SILO KONTROLCÜSÜ - v3.2 (Hata Düzeltmesi & Tam ResourceData Entegrasyonu)
+ *
+ * * HATA DÜZELTMESİ (CS0246):
+ * - Kodun içindeki tüm 'ResourceType' (eski Enum) referansları temizlendi.
+ * - Yerine 'ResourceData' (ScriptableObject) getirildi.
+ * - 'HandleWorkerArrivedAtTarget' metodunda 'GetProducedResource()' çağrısı düzeltildi.
  */
 
 using UnityEngine;
@@ -20,14 +22,13 @@ public class SiloController : MonoBehaviour
         public int collectedAmount;
     }
 
-    // --- DEĞİŞİKLİK: ResourceData Yapısı ---
+    // Envanter artık ResourceData (Asset) tabanlı
     [System.Serializable]
     public class SiloInventoryEntry
     {
-        public ResourceData resource; // <-- Enum yerine Asset
+        public ResourceData resource; 
         public int amount;
     }
-    // --------------------------------------
 
     [Header("Veri")]
     [SerializeField] private SiloData siloData;
@@ -41,9 +42,8 @@ public class SiloController : MonoBehaviour
     [Header("Silo Envanteri")]
     [SerializeField] private List<SiloInventoryEntry> inventoryDisplay = new List<SiloInventoryEntry>();
     
-    // --- DEĞİŞİKLİK: Sözlük Anahtarı ---
+    // Sözlük anahtarı ResourceData (Asset) oldu
     private Dictionary<ResourceData, int> siloInventory = new Dictionary<ResourceData, int>();
-    // -----------------------------------
 
     [Header("İzleme")]
     [SerializeField] private int currentActiveWorkers = 0;
@@ -72,7 +72,13 @@ public class SiloController : MonoBehaviour
     {
         resourcesWaitingToBeCollected = 0;
         if (targets == null) return;
-        foreach (var t in targets) { if (t.house != null) resourcesWaitingToBeCollected += t.house.GetResourceCount(); }
+        foreach (var t in targets)
+        {
+            if (t.house != null)
+            {
+                resourcesWaitingToBeCollected += t.house.GetResourceCount();
+            }
+        }
     }
     
     private void ManageWorkforce()
@@ -131,44 +137,50 @@ public class SiloController : MonoBehaviour
         npc.Activate(siloData.npcDataToSpawn, home, dest, path);
     }
 
+    // --- DÜZELTME BURADA ---
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
     {
         SiloTargetData data = workerAssignments.ContainsKey(npc) ? workerAssignments[npc] : null;
         int collected = 0;
+        
+        // ResourceType yerine ResourceData kullanıyoruz
         ResourceData resource = null;
 
         if (data != null && data.house != null)
         {
             int cap = npc.GetNpcData().maxCarryCapacity;
             collected = data.house.DecreaseCounter(cap);
+            
             if (collected > 0)
             {
+                // Evden üretilen kaynağın verisini (Asset) al
                 resource = data.house.GetProducedResource();
             }
         }
         
+        // NPC'ye dönüş emrini, toplanan miktar ve kaynak verisiyle ver
         npc.ReturnHome(collected, resource);
     }
+    // -----------------------
 
-    // --- DEĞİŞİKLİK: ResourceData İşleme ---
     private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceData resource)
     {
         if (amount > 0 && resource != null)
         {
-            // 1. Sözlüğe ekle
+            // Sözlüğe ekle
             if (siloInventory.ContainsKey(resource)) siloInventory[resource] += amount;
             else siloInventory.Add(resource, amount);
 
-            // 2. Inspector Listesini Güncelle
-            UpdateInventoryDisplay();
-
-            // 3. Ev İstatistiğini Güncelle
+            // İstatistikleri güncelle
             if (workerAssignments.ContainsKey(npc))
             {
                 workerAssignments[npc].collectedAmount += amount;
             }
+            
+            UpdateInventoryDisplay();
         }
 
+        // İşçi yönetimi
         CalculateAvailableResources();
         int cap = siloData.npcDataToSpawn.maxCarryCapacity;
         int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
@@ -192,7 +204,6 @@ public class SiloController : MonoBehaviour
             inventoryDisplay.Add(new SiloInventoryEntry { resource = kvp.Key, amount = kvp.Value });
         }
     }
-    // ---------------------------------------
 
     private void RetireWorker(FriendlyNpcAI npc)
     {
@@ -213,4 +224,26 @@ public class SiloController : MonoBehaviour
     }
     
     public SiloData GetSiloData() { return siloData; }
+    
+    // --- Market Desteği İçin ---
+    public int TakeResource(ResourceData resource, int amountToTake)
+    {
+        if (resource == null || !siloInventory.ContainsKey(resource))
+        {
+            return 0; 
+        }
+
+        int currentAmount = siloInventory[resource];
+        int actualAmountGiven = Mathf.Min(currentAmount, amountToTake);
+        
+        siloInventory[resource] -= actualAmountGiven;
+        
+        UpdateInventoryDisplay();
+        return actualAmountGiven;
+    }
+
+    public Transform GetSpawnPoint()
+    {
+        return (spawnPoint != null) ? spawnPoint : transform;
+    }
 }
