@@ -2006,7 +2006,7 @@ MonoBehaviour:
   - {fileID: 735447905}
   - {fileID: 290435000}
   spawnPoint: {fileID: 1008945305}
-  optionalPath: {fileID: 0}
+  optionalPath: {fileID: 1953460727}
   totalResources: 0
 --- !u!4 &368162601
 Transform:
@@ -2021,8 +2021,8 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1953460726}
   - {fileID: 1929393360}
+  - {fileID: 1953460726}
   - {fileID: 1008945305}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -8951,7 +8951,7 @@ Transform:
   m_GameObject: {fileID: 1636200160}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.13, y: 0, z: -4.68}
+  m_LocalPosition: {x: -0.13, y: 0, z: -2.76}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -10430,7 +10430,7 @@ Transform:
   m_GameObject: {fileID: 1932446304}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -2.5, y: 0, z: -7.99}
+  m_LocalPosition: {x: -2.5, y: 0, z: -5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
