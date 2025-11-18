@@ -1,17 +1,11 @@
 /*
- * SILO KONTROLCÜSÜ (Silo Controller) - v2.2 (Hedefe Özel Yollar)
- * * GÖREVİ:
- * - Silo'nun kaynak toplayacağı evleri ve bu evlere giden yolları yönetir.
- *
- * * DEĞİŞİKLİKLER (v2.2):
- * - YENİ SINIF: 'SiloTargetData'.
- * - Bu sınıf, bir 'NpcHousing' (Ev) ve ona giden 'NpcPath' (Yol) çiftini tutar.
- * - 'targetHouses' listesi, 'targets' (List<SiloTargetData>) olarak değiştirildi.
- * - 'optionalPath' (Global yol) KALDIRILDI.
- * - 'SendWorkerToBestTarget' metodu güncellendi:
- * - Artık en zengin hedefi bulurken 'targets' listesini tarıyor.
- * - NPC'yi göreve gönderirken, o hedefe özel atanmış yolu (target.path) kullanıyor.
- * - 'CalculateAvailableResources' ve 'GetClosestHouse' metotları yeni liste yapısına uyarlandı.
+ * SILO KONTROLCÜSÜ (Silo Controller) - v2.3 (SiloData Entegrasyonu)
+ * * DEĞİŞİKLİKLER (v2.3):
+ * - 'housingData' alanı (tipi 'NpcHousingData' idi) SİLİNDİ.
+ * - YENİ ALAN: 'siloData' (tipi 'SiloData'). Artık kendi özel verisini kullanıyor.
+ * - 'GetHousingData' metodu SİLİNDİ.
+ * - YENİ METOT: 'GetSiloData'. NpcPooler'ın okuması için.
+ * - Tüm mantık (Spawn, ManageWorkforce vb.) artık 'siloData' üzerinden çalışıyor.
  */
 
 using UnityEngine;
@@ -21,36 +15,29 @@ using System.Linq;
 
 public class SiloController : MonoBehaviour
 {
-    // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Veri Yapısı) ---
     [System.Serializable]
     public class SiloTargetData
     {
-        [Tooltip("Kaynak toplanacak hedef ev.")]
         public NpcHousing house;
-        
-        [Tooltip("Silo'dan bu eve giderken kullanılacak özel yol (Opsiyonel).")]
         public NpcPath path;
     }
-    // --- DEĞİŞİKLİK SONU ---
 
+    // --- DEĞİŞİKLİK BAŞLANGICI (Veri Tipi) ---
     [Header("Veri Kaynağı")]
-    [SerializeField] private NpcHousingData housingData;
+    [Tooltip("Silo'ya özel veri dosyası.")]
+    [SerializeField] private SiloData siloData; // <-- ARTIK SiloData KULLANIYOR
+    // --- DEĞİŞİKLİK SONU ---
 
     [Header("Hedefler")]
-    // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Yeni Liste) ---
-    [Tooltip("Silo'nun kaynak toplayacağı evler ve yolları.")]
     [SerializeField] private List<SiloTargetData> targets;
-    // [SerializeField] private List<NpcHousing> targetHouses; // <-- SİLİNDİ
-    // --- DEĞİŞİKLİK SONU ---
 
     [Header("Konumlandırma")]
     [SerializeField] private Transform spawnPoint;
-    // [SerializeField] private NpcPath optionalPath; // <-- SİLİNDİ (Artık her hedefin kendi yolu var)
 
     [Header("Akıllı Sistem Ayarları")]
     [SerializeField] private float scanInterval = 2.0f;
 
-    [Header("Silo Envanteri (İzleme)")]
+    [Header("Silo Envanteri")]
     [SerializeField] private int totalStoredResources = 0;
     [SerializeField] private int currentActiveWorkers = 0;
     [SerializeField] private int resourcesWaitingToBeCollected = 0;
@@ -59,11 +46,13 @@ public class SiloController : MonoBehaviour
 
     private void Start()
     {
-        if (housingData == null)
+        // --- DEĞİŞİKLİK: 'siloData' kontrolü ---
+        if (siloData == null)
         {
-            Debug.LogError($"Silo ({gameObject.name}): 'Housing Data' atanmamış!", this);
+            Debug.LogError($"Silo ({gameObject.name}): 'Silo Data' atanmamış!", this);
             return;
         }
+        // ---
         StartCoroutine(SmartMonitorRoutine());
     }
 
@@ -80,7 +69,6 @@ public class SiloController : MonoBehaviour
     private void CalculateAvailableResources()
     {
         resourcesWaitingToBeCollected = 0;
-        // --- DEĞİŞİKLİK (v2.2) ---
         if (targets == null) return;
         
         foreach (var target in targets)
@@ -90,14 +78,15 @@ public class SiloController : MonoBehaviour
                 resourcesWaitingToBeCollected += target.house.GetResourceCount();
             }
         }
-        // ---
     }
 
     private void ManageWorkforce()
     {
-        int workerCapacity = housingData.npcDataToSpawn.maxCarryCapacity;
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        int workerCapacity = siloData.npcDataToSpawn.maxCarryCapacity;
         int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
-        neededWorkers = Mathf.Clamp(neededWorkers, 0, housingData.populationCount);
+        neededWorkers = Mathf.Clamp(neededWorkers, 0, siloData.populationCount);
+        // ---
 
         int workersToSpawn = neededWorkers - activeWorkers.Count;
 
@@ -109,7 +98,9 @@ public class SiloController : MonoBehaviour
 
     private IEnumerator SpawnBatch(int count)
     {
-        string poolTag = housingData.genericNpcPrefab.name;
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        string poolTag = siloData.genericNpcPrefab.name;
+        // ---
         Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
 
         for (int i = 0; i < count; i++)
@@ -132,10 +123,6 @@ public class SiloController : MonoBehaviour
 
     private void SendWorkerToBestTarget(FriendlyNpcAI npc)
     {
-        // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Hedef Seçimi) ---
-        
-        // 1. 'targets' listesinden, evi (house) dolu olan ve kaynağı olanlar arasından
-        // en çok kaynağı olan 'SiloTargetData'yı bul.
         SiloTargetData bestTargetData = targets
             .Where(t => t.house != null && t.house.GetResourceCount() > 0)
             .OrderByDescending(t => t.house.GetResourceCount())
@@ -143,28 +130,22 @@ public class SiloController : MonoBehaviour
 
         Transform targetTransform;
         Transform myHome = (spawnPoint != null) ? spawnPoint : transform;
-        
-        // Bu hedefe özel yol var mı?
         NpcPath pathForThisTarget = null;
 
         if (bestTargetData != null)
         {
-            // Hedefin kapısına git
             targetTransform = bestTargetData.house.GetSpawnPoint();
-            
-            // Hedefin özel yolunu al
             pathForThisTarget = bestTargetData.path;
         }
         else
         {
-            // Kaynak yoksa emekli et
             RetireWorker(npc);
             return;
         }
-        // --- DEĞİŞİKLİK SONU ---
 
-        // NPC'ye o hedefe özel yolu vererek gönder
-        npc.Activate(housingData.npcDataToSpawn, myHome, targetTransform, pathForThisTarget);
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        npc.Activate(siloData.npcDataToSpawn, myHome, targetTransform, pathForThisTarget);
+        // ---
     }
 
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
@@ -186,13 +167,14 @@ public class SiloController : MonoBehaviour
         if (amount > 0)
         {
             totalStoredResources += amount;
-            // Debug.Log($"Silo: +{amount} kaynak. Toplam: {totalStoredResources}");
         }
 
         CalculateAvailableResources();
-        int workerCapacity = housingData.npcDataToSpawn.maxCarryCapacity;
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        int workerCapacity = siloData.npcDataToSpawn.maxCarryCapacity;
         int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
-        neededWorkers = Mathf.Clamp(neededWorkers, 0, housingData.populationCount);
+        neededWorkers = Mathf.Clamp(neededWorkers, 0, siloData.populationCount);
+        // ---
 
         if (activeWorkers.Count > neededWorkers || resourcesWaitingToBeCollected == 0)
         {
@@ -212,13 +194,17 @@ public class SiloController : MonoBehaviour
         activeWorkers.Remove(npc);
         currentActiveWorkers = activeWorkers.Count;
 
-        string poolTag = housingData.genericNpcPrefab.name;
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        string poolTag = siloData.genericNpcPrefab.name;
+        // ---
         NpcPooler.Instance.ReturnToPool(poolTag, npc);
     }
 
     private IEnumerator RestAndRestart(FriendlyNpcAI npc)
     {
-        yield return new WaitForSeconds(housingData.restDuration);
+        // --- DEĞİŞİKLİK: 'siloData'dan okuma ---
+        yield return new WaitForSeconds(siloData.restDuration);
+        // ---
         
         if (npc.gameObject.activeInHierarchy) 
         {
@@ -230,14 +216,11 @@ public class SiloController : MonoBehaviour
     {
         NpcHousing closest = null;
         float minDst = Mathf.Infinity;
-        
-        // --- DEĞİŞİKLİK (v2.2) ---
         if (targets == null) return null;
         
         foreach (var targetData in targets)
         {
             if (targetData.house == null) continue;
-            
             float dst = Vector3.Distance(position, targetData.house.transform.position);
             if (dst < minDst && dst < 5.0f) 
             {
@@ -245,9 +228,11 @@ public class SiloController : MonoBehaviour
                 closest = targetData.house;
             }
         }
-        // ---
         return closest;
     }
     
-    public NpcHousingData GetHousingData() { return housingData; }
+    // --- DEĞİŞİKLİK BAŞLANGICI (Yeni Getter) ---
+    // NpcPooler'ın yeni verilere erişmesi için
+    public SiloData GetSiloData() { return siloData; }
+    // --- DEĞİŞİKLİK SONU ---
 }

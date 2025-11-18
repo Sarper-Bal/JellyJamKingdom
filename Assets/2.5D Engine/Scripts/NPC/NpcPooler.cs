@@ -1,13 +1,12 @@
 /*
- * NPC HAVUZ YÖNETİCİSİ (NPC POOLER) - v1.2 (Tuple Hatası Düzeltildi)
- * GÖREVİ:
- * - Sahnedeki Evleri ve Siloları tarar.
- * - İhtiyaç duyulan toplam NPC sayısını hesaplar.
- * - Oyun başında (Awake/Start) tüm NPC'leri yaratıp pasif havuza atar.
- *
- * * HATA DÜZELTMESİ (v1.2):
- * - 'needs[poolTag].count' satırındaki derleme hatası giderildi.
- * - Tuple elemanına erişirken garanti yöntem olan '.Item2' kullanıldı.
+ * NPC HAVUZ YÖNETİCİSİ (NPC POOLER) - v1.3 (SiloData Desteği)
+ * * DEĞİŞİKLİKLER (v1.3):
+ * - 'CalculateTotalNeeds' metodu güncellendi:
+ * - Siloları tararken artık 'silo.GetSiloData()' kullanıyor.
+ * - 'AddNeedsFromData' metoduna bir "kardeş" (overload) metot eklendi:
+ * 'AddNeedsFromData(..., SiloData data, ...)'
+ * - Bu sayede Pooler, hem Evlerin hem de Siloların ihtiyaçlarını
+ * aynı mantıkla ama farklı veri tiplerinden toplayabiliyor.
  */
 
 using UnityEngine;
@@ -17,7 +16,6 @@ public class NpcPooler : MonoBehaviour
 {
     public static NpcPooler Instance { get; private set; }
 
-    // Key = Prefab Adı, Value = NPC Kuyruğu
     private Dictionary<string, Queue<FriendlyNpcAI>> poolDictionary;
     private Transform poolParent;
 
@@ -33,14 +31,11 @@ public class NpcPooler : MonoBehaviour
         poolDictionary = new Dictionary<string, Queue<FriendlyNpcAI>>();
         poolParent = new GameObject("NpcPool").transform;
         
-        // İhtiyaçları hesapla ve havuzu doldur
         CalculateTotalNeeds();
     }
 
     private void CalculateTotalNeeds()
     {
-        // (GameObject, int) türünde bir Tuple sözlüğü
-        // Item1 = Prefab, Item2 = Sayı
         Dictionary<string, (GameObject, int)> needs = 
             new Dictionary<string, (GameObject, int)>();
 
@@ -48,43 +43,55 @@ public class NpcPooler : MonoBehaviour
         NpcHousing[] allHouses = FindObjectsOfType<NpcHousing>();
         foreach (NpcHousing house in allHouses)
         {
-            AddNeedsFromData(needs, house.GetHousingData(), house.name);
+            // NpcHousingData kullanır
+            AddNeedsFromData(needs, house.GetHousingData());
         }
         
         // 2. Siloları (SiloController) Tara
         SiloController[] allSilos = FindObjectsOfType<SiloController>();
         foreach (SiloController silo in allSilos)
         {
-            AddNeedsFromData(needs, silo.GetHousingData(), silo.name);
+            // --- DEĞİŞİKLİK: SiloData kullanır ---
+            AddNeedsFromData(needs, silo.GetSiloData());
+            // ---
         }
         
-        // Havuzları oluştur
         PrewarmPools(needs);
     }
 
-    private void AddNeedsFromData(Dictionary<string, (GameObject, int)> needs, NpcHousingData data, string ownerName)
+    // Metot 1: NpcHousingData için
+    private void AddNeedsFromData(Dictionary<string, (GameObject, int)> needs, NpcHousingData data)
     {
-        if (data == null || data.genericNpcPrefab == null)
-        {
-             return;
-        }
+        if (data == null || data.genericNpcPrefab == null) return;
 
         string poolTag = data.genericNpcPrefab.name;
         int count = data.populationCount;
+        AddToNeedsList(needs, poolTag, data.genericNpcPrefab, count);
+    }
 
-        if (!needs.ContainsKey(poolTag))
+    // --- DEĞİŞİKLİK BAŞLANGICI (v1.3 - Yeni Overload) ---
+    // Metot 2: SiloData için (Aynı mantık, farklı veri tipi)
+    private void AddNeedsFromData(Dictionary<string, (GameObject, int)> needs, SiloData data)
+    {
+        if (data == null || data.genericNpcPrefab == null) return;
+
+        string poolTag = data.genericNpcPrefab.name;
+        int count = data.populationCount;
+        AddToNeedsList(needs, poolTag, data.genericNpcPrefab, count);
+    }
+    // --- DEĞİŞİKLİK SONU ---
+
+    // Kod tekrarını önlemek için ortak ekleme mantığı
+    private void AddToNeedsList(Dictionary<string, (GameObject, int)> needs, string tag, GameObject prefab, int count)
+    {
+        if (!needs.ContainsKey(tag))
         {
-            // Listeye yeni ekle
-            needs.Add(poolTag, (data.genericNpcPrefab, count));
+            needs.Add(tag, (prefab, count));
         }
         else
         {
-            // --- DÜZELTME BURADA ---
-            // Eski kod: needs[poolTag].count 
-            // Yeni kod: needs[poolTag].Item2 (Item2 = int count demektir)
-            int currentCount = needs[poolTag].Item2;
-            
-            needs[poolTag] = (data.genericNpcPrefab, currentCount + count);
+            int currentCount = needs[tag].Item2;
+            needs[tag] = (prefab, currentCount + count);
         }
     }
 
@@ -93,9 +100,8 @@ public class NpcPooler : MonoBehaviour
         foreach (var entry in needs)
         {
             string poolTag = entry.Key;
-            // Tuple elemanlarına burada da Item1 ve Item2 diyebiliriz veya deconstruct edebiliriz
-            GameObject prefab = entry.Value.prefab; // veya entry.Value.Item1
-            int count = entry.Value.count;          // veya entry.Value.Item2
+            GameObject prefab = entry.Value.prefab;
+            int count = entry.Value.count;
             
             Transform prefabParent = new GameObject(poolTag + " Pool").transform;
             prefabParent.SetParent(poolParent);
@@ -125,7 +131,6 @@ public class NpcPooler : MonoBehaviour
     {
         if (!poolDictionary.ContainsKey(poolTag) || poolDictionary[poolTag].Count == 0)
         {
-            // Eğer havuz boşaldıysa ve acil lazımsa burada yeni yaratılabilir (Opsiyonel)
             return null;
         }
 
@@ -152,7 +157,6 @@ public class NpcPooler : MonoBehaviour
         }
         
         npc.gameObject.SetActive(false);
-        // Pool parent'ın altına geri taşı ki hiyerarşi temiz kalsın
         Transform specificPoolParent = poolParent.Find(poolTag + " Pool");
         if (specificPoolParent != null)
             npc.transform.SetParent(specificPoolParent);
