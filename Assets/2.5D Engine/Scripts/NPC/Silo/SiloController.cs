@@ -1,43 +1,43 @@
 /*
- * SILO KONTROLCÜSÜ (Silo Controller)
- * GÖREVİ:
- * - Özel bir bina türüdür. 'NpcHousing'den bağımsız çalışır.
- * - Kendi NPC'lerini 'NpcPooler' üzerinden spawn eder.
- * - Hedeflediği evler (targetHouses) listesinden, en çok kaynağı olanı seçer.
- * - NPC'leri o eve gönderip kaynakları "çalar" (transfer eder) ve Silo'da toplar.
- * * ÖZELLİKLER:
- * - Modüler: İstediğiniz kadar evi listeye ekleyebilirsiniz.
- * - Akıllı: Her seferinde en karlı hedefi seçer.
- * - Optimize: NpcPooler ve Event-Driven mimariyi kullanır.
+ * SILO KONTROLCÜSÜ (Silo Controller) - v2.0 (Akıllı & Talep Üzerine)
+ * * GÖREVİ:
+ * - Hedef evlerdeki toplam kaynağı sürekli izler.
+ * - İhtiyaç duyulan işçi sayısını (Toplam Kaynak / Kapasite) hesaplar.
+ * - SADECE ihtiyaç kadar işçiyi 'NpcPooler'dan çağırır.
+ * - İşçiler görevden döndüğünde, hala ihtiyaç yoksa onları havuza geri gönderir (emekli eder).
+ * - Bu sayede sahnede asla gereksiz işçi bulunmaz (Tam Optimizasyon).
  */
 
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq; // En zengin evi bulmak (Sıralama) için gerekli
+using System.Linq;
 
 public class SiloController : MonoBehaviour
 {
     [Header("Veri Kaynağı")]
-    [Tooltip("Silo'nun çıkaracağı taşıyıcı NPC'lerin verisi (Prefab, Sayı, Hız vb.).")]
+    [Tooltip("Silo'nun çıkaracağı taşıyıcı NPC'lerin verisi.")]
     [SerializeField] private NpcHousingData housingData;
 
-    [Header("Hedef Evler")]
-    [Tooltip("Silo'nun kaynak toplayacağı evlerin listesi.")]
+    [Header("Hedefler")]
+    [Tooltip("Kaynak toplanacak evlerin listesi.")]
     [SerializeField] private List<NpcHousing> targetHouses;
 
     [Header("Konumlandırma")]
-    [Tooltip("Silo NPC'lerinin doğacağı ve kaynakları getireceği nokta.")]
     [SerializeField] private Transform spawnPoint;
-    
-    [Tooltip("Silo ile hedefler arasındaki yol (Opsiyonel).")]
     [SerializeField] private NpcPath optionalPath;
 
-    [Header("Silo Envanteri")]
-    [SerializeField] private int totalResources = 0;
+    [Header("Akıllı Sistem Ayarları")]
+    [Tooltip("Evleri ne sıklıkla (saniye) tarayıp işçi sayısını güncelleyecek?")]
+    [SerializeField] private float scanInterval = 2.0f;
 
-    // Yönetilen NPC Listesi
-    private List<FriendlyNpcAI> managedNpcs = new List<FriendlyNpcAI>();
+    [Header("Silo Envanteri (İzleme)")]
+    [SerializeField] private int totalStoredResources = 0;
+    [SerializeField] private int currentActiveWorkers = 0;
+    [SerializeField] private int resourcesWaitingToBeCollected = 0;
+
+    // Şu an aktif olarak çalışan işçilerin listesi
+    private List<FriendlyNpcAI> activeWorkers = new List<FriendlyNpcAI>();
 
     private void Start()
     {
@@ -47,149 +47,215 @@ public class SiloController : MonoBehaviour
             return;
         }
 
-        // NPC'leri (Havuzdan) Spawn Etmeye Başla
-        StartCoroutine(SpawnWorkers());
+        // Sonsuz döngüde tarama yapacak Coroutine'i başlat
+        StartCoroutine(SmartMonitorRoutine());
     }
 
     /// <summary>
-    /// NpcPooler'dan işçileri çağırır.
+    /// Belirli aralıklarla kaynakları tarar ve işçi sayısını ayarlar.
     /// </summary>
-    private IEnumerator SpawnWorkers()
+    private IEnumerator SmartMonitorRoutine()
     {
-        Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
-        string poolTag = housingData.genericNpcPrefab.name;
-
-        for (int i = 0; i < housingData.populationCount; i++)
+        while (true)
         {
-            // 1. Havuzdan Çek
+            // 1. Hedeflerdeki toplam kaynağı hesapla
+            CalculateAvailableResources();
+
+            // 2. Gerekli işçi sayısını hesapla ve yönet
+            ManageWorkforce();
+
+            yield return new WaitForSeconds(scanInterval);
+        }
+    }
+
+    private void CalculateAvailableResources()
+    {
+        resourcesWaitingToBeCollected = 0;
+        foreach (var house in targetHouses)
+        {
+            if (house != null)
+            {
+                resourcesWaitingToBeCollected += house.GetResourceCount();
+            }
+        }
+    }
+
+    private void ManageWorkforce()
+    {
+        // 1 işçinin taşıma kapasitesi
+        int workerCapacity = housingData.npcDataToSpawn.maxCarryCapacity;
+        
+        // Matematik: (Toplam Kaynak / Kapasite) yukarı yuvarla
+        // Örn: 12 kaynak var, kapasite 5 => 2.4 => 3 işçi lazım.
+        // Eğer kaynak 0 ise, 0 işçi lazım.
+        int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
+
+        // Maksimum nüfus sınırını (HousingData'dan) aşma
+        neededWorkers = Mathf.Clamp(neededWorkers, 0, housingData.populationCount);
+
+        // Şu an kaç eksiğimiz var?
+        int workersToSpawn = neededWorkers - activeWorkers.Count;
+
+        if (workersToSpawn > 0)
+        {
+            // İşçi lazım! Spawn et.
+            StartCoroutine(SpawnBatch(workersToSpawn));
+        }
+        // Not: Eğer workersToSpawn < 0 ise (fazla işçi varsa),
+        // onları burada anında silmiyoruz. Görevden dönmelerini bekliyoruz (HandleWorkerReturnedHome).
+        // Bu daha doğal görünür.
+    }
+
+    private IEnumerator SpawnBatch(int count)
+    {
+        string poolTag = housingData.genericNpcPrefab.name;
+        Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
+
+        for (int i = 0; i < count; i++)
+        {
+            // Çifte kontrol: Spawn sırasında kaynaklar tükenmiş olabilir mi?
+            // (Basitlik için şimdilik atlıyoruz, ama eklenebilir)
+
             FriendlyNpcAI npc = NpcPooler.Instance.SpawnFromPool(poolTag, pos, Quaternion.identity);
 
             if (npc != null)
             {
-                // 2. Yönetilenlere ekle
-                managedNpcs.Add(npc);
+                activeWorkers.Add(npc);
+                currentActiveWorkers = activeWorkers.Count;
 
-                // 3. Event'lerine Abone Ol
+                // Event'lere Abone Ol
                 npc.OnArrivedAtWork += HandleWorkerArrivedAtTarget;
                 npc.OnArrivedAtHome += HandleWorkerReturnedHome;
 
-                // 4. İlk Göreve Gönder
+                // Göreve Gönder
                 SendWorkerToBestTarget(npc);
             }
 
-            yield return new WaitForSeconds(housingData.spawnInterval);
+            // Hepsini aynı karede (frame) spawn etmemek için minik bir bekleme
+            yield return new WaitForSeconds(0.2f);
         }
     }
 
-    /// <summary>
-    /// NPC'yi o anki en zengin eve gönderir.
-    /// </summary>
     private void SendWorkerToBestTarget(FriendlyNpcAI npc)
     {
-        // 1. Hedef listesinden, kaynağı en çok olanı bul
-        // (GetResourceCount > 0 olanlar arasından)
+        // En zengin evi bul
         NpcHousing bestTarget = targetHouses
             .Where(h => h != null && h.GetResourceCount() > 0)
             .OrderByDescending(h => h.GetResourceCount())
             .FirstOrDefault();
 
-        // 2. Hedef pozisyonu belirle
-        Transform targetTransform = null;
-        
-        // Ev hedefi varsa onun spawn noktasını, yoksa (kaynak yoksa) Silo'nun önünde beklemesi için kendi spawn noktamızı verelim.
+        // Hedef pozisyon
+        Transform targetTransform;
+        Transform myHome = (spawnPoint != null) ? spawnPoint : transform;
+
         if (bestTarget != null)
         {
-            // Hedef evin spawn noktasına (kapısına) git
-            // (NpcHousing'e 'GetSpawnPoint' metodu eklemek şık olurdu ama
-            // şimdilik transform'una gidiyoruz, çünkü spawnPoint private)
-            targetTransform = bestTarget.transform; 
+            targetTransform = (bestTarget.houseTarget != null && bestTarget.houseTarget.transform != null) 
+                              ? bestTarget.transform // Basitçe evin kendisine gitsin (veya spawnPoint'una)
+                              : bestTarget.transform;
+            
+            // (Not: NpcHousing'e public 'GetSpawnPoint' eklerseniz daha temiz olur, 
+            // şimdilik transform kullanıyoruz)
         }
         else
         {
-            // Hiçbir evde kaynak yoksa, Silo'nun önünde bekle
-            targetTransform = (spawnPoint != null) ? spawnPoint : transform;
+            // Kaynak kalmadıysa, NPC'yi hemen havuza gönderelim (evde beklemesine gerek yok)
+            RetireWorker(npc);
+            return;
         }
 
-        // 3. NPC'yi Oraya Gönder (Activate/Initialize)
-        // Silo'nun kendi 'spawnPoint'unu EV (Home), hedef evi İŞ (Work) olarak veriyoruz.
-        Transform myHome = (spawnPoint != null) ? spawnPoint : transform;
-        
-        // NPC'ye "Senin hedefin bu" diyoruz.
-        // Not: bestTarget'ı 'npc' üzerinde saklamıyoruz (NPC aptaldır),
-        // sadece oraya gitmesini söylüyoruz. Vardığında 'HandleWorkerArrivedAtTarget'ta
-        // tekrar 'bestTarget'ı bulacağız veya basitçe o anki pozisyona en yakın evi arayacağız.
-        // **Daha İyisi:** NPC'ye hedefi verdik ama vardığında hangi evde olduğunu bilmemiz lazım.
-        // Şimdilik basit tutalım: Vardığında tekrar en yakın evi kontrol et veya
-        // targetHouses listesinden mesafe kontrolü yap.
-        
+        // NPC'yi Aktive Et ve Gönder
         npc.Activate(housingData.npcDataToSpawn, myHome, targetTransform, optionalPath);
     }
 
-    /// <summary>
-    /// İşçi hedef eve vardığında çalışır.
-    /// </summary>
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
     {
-        // NPC şu an bir evin kapısında. Hangi ev?
-        // Basit yöntem: En yakın evi bul.
-        NpcHousing currentHouse = GetClosestHouse(npc.transform.position);
-
+        // En yakın evi bul (basit collision/mesafe kontrolü yerine mantıksal hedefleme)
+        // Not: SendWorkerToBestTarget'da hedefi vermiştik ama NPC 'aptal' olduğu için
+        // kime vardığını bilmiyor. Tekrar en yakını bulalım.
+        
+        NpcHousing targetHouse = GetClosestHouse(npc.transform.position);
         int collected = 0;
-        if (currentHouse != null)
+
+        if (targetHouse != null)
         {
-            // Kapasitesi kadar al
             int capacity = npc.GetNpcData().maxCarryCapacity;
-            collected = currentHouse.DecreaseCounter(capacity);
+            collected = targetHouse.DecreaseCounter(capacity);
         }
 
-        if (collected > 0)
+        // Kaynak aldıysa veya alamadıysa eve dön
+        npc.ReturnHome(collected);
+    }
+
+    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount)
+    {
+        // 1. Kaynağı boşalt
+        if (amount > 0)
         {
-            // Kaynak aldı, eve dön
-            npc.ReturnHome(collected);
+            totalStoredResources += amount;
+            // Debug.Log($"Silo: +{amount} kaynak. Toplam: {totalStoredResources}");
+        }
+
+        // 2. KARAR ANI: Bu işçiye hala ihtiyaç var mı?
+        
+        // Tekrar hesap yapalım
+        CalculateAvailableResources();
+        int workerCapacity = housingData.npcDataToSpawn.maxCarryCapacity;
+        int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
+        neededWorkers = Mathf.Clamp(neededWorkers, 0, housingData.populationCount);
+
+        // Eğer şu anki aktif işçi sayısı, gerekenden fazlaysa => EMEKLİ ET
+        // (activeWorkers.Count > neededWorkers)
+        // Veya hiç kaynak kalmadıysa => EMEKLİ ET
+        if (activeWorkers.Count > neededWorkers || resourcesWaitingToBeCollected == 0)
+        {
+            RetireWorker(npc);
         }
         else
         {
-            // Kaynak alamadı (yolda bitmiş olabilir), eli boş dön
-            npc.ReturnHome(0);
+            // Hala ihtiyaç var, dinlenip çalışmaya devam et
+            StartCoroutine(RestAndRestart(npc));
         }
     }
 
-    /// <summary>
-    /// İşçi Silo'ya döndüğünde çalışır.
-    /// </summary>
-    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount)
+    private void RetireWorker(FriendlyNpcAI npc)
     {
-        // 1. Kaynakları Silo'ya boşalt
-        if (amount > 0)
-        {
-            totalResources += amount;
-            Debug.Log($"Silo: {amount} kaynak geldi. Toplam Stok: {totalResources}");
-        }
+        // Event aboneliklerini kaldır
+        npc.OnArrivedAtWork -= HandleWorkerArrivedAtTarget;
+        npc.OnArrivedAtHome -= HandleWorkerReturnedHome;
 
-        // 2. Dinlen ve sonra tekrar ava çık
-        StartCoroutine(RestAndRestart(npc));
+        // Listeden çıkar
+        activeWorkers.Remove(npc);
+        currentActiveWorkers = activeWorkers.Count;
+
+        // Havuza geri gönder (NpcPooler'ın ReturnToPool metodu)
+        string poolTag = housingData.genericNpcPrefab.name;
+        NpcPooler.Instance.ReturnToPool(poolTag, npc);
+        
+        // Debug.Log("Silo: İşçi görevi bitti, havuza döndü.");
     }
 
     private IEnumerator RestAndRestart(FriendlyNpcAI npc)
     {
         yield return new WaitForSeconds(housingData.restDuration);
         
-        // Tekrar en iyi hedefi bul ve gönder
-        SendWorkerToBestTarget(npc);
+        // Dinlenme bittiğinde tekrar kontrol et (belki o arada kaynaklar bitti?)
+        if (npc.gameObject.activeInHierarchy) // NPC hala bizdeyse
+        {
+            SendWorkerToBestTarget(npc);
+        }
     }
-
-    // --- Yardımcı Metotlar ---
 
     private NpcHousing GetClosestHouse(Vector3 position)
     {
         NpcHousing closest = null;
         float minDst = Mathf.Infinity;
-        
         foreach (var house in targetHouses)
         {
             if (house == null) continue;
             float dst = Vector3.Distance(position, house.transform.position);
-            if (dst < minDst && dst < 2.0f) // 2 birim yakınındaysa o evdedir
+            // Biraz toleranslı mesafe (NPC tam üstüne gelmeyebilir)
+            if (dst < minDst && dst < 5.0f) 
             {
                 minDst = dst;
                 closest = house;
@@ -198,9 +264,5 @@ public class SiloController : MonoBehaviour
         return closest;
     }
     
-    // NpcPooler'ın bu script'ten veri okuyabilmesi için (Interface kullanmıyorsak)
-    public NpcHousingData GetHousingData()
-    {
-        return housingData;
-    }
+    public NpcHousingData GetHousingData() { return housingData; }
 }
