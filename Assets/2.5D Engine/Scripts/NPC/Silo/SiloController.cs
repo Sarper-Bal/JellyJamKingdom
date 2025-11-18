@@ -1,9 +1,8 @@
 /*
- * SILO KONTROLCÜSÜ - v3.0 (Envanter Sistemi)
+ * SILO KONTROLCÜSÜ - v3.1 (ResourceData Envanteri)
  * DEĞİŞİKLİKLER:
- * - 'SiloInventoryEntry' struct'ı eklendi (Inspector'da görmek için).
- * - 'siloInventory' (Dictionary) eklendi (Hızlı erişim için).
- * - 'HandleWorkerReturnedHome': Gelen kaynağın tipine göre ilgili kasayı artırıyor.
+ * - 'SiloInventoryEntry' artık 'ResourceData' tutuyor.
+ * - 'siloInventory' sözlüğü 'Dictionary<ResourceData, int>' oldu.
  */
 
 using UnityEngine;
@@ -21,14 +20,14 @@ public class SiloController : MonoBehaviour
         public int collectedAmount;
     }
 
-    // --- DEĞİŞİKLİK: Envanter Görünümü ---
+    // --- DEĞİŞİKLİK: ResourceData Yapısı ---
     [System.Serializable]
     public class SiloInventoryEntry
     {
-        public ResourceType type;
+        public ResourceData resource; // <-- Enum yerine Asset
         public int amount;
     }
-    // -------------------------------------
+    // --------------------------------------
 
     [Header("Veri")]
     [SerializeField] private SiloData siloData;
@@ -40,11 +39,11 @@ public class SiloController : MonoBehaviour
     [SerializeField] private Transform spawnPoint;
 
     [Header("Silo Envanteri")]
-    // Inspector'da görmek için Liste
     [SerializeField] private List<SiloInventoryEntry> inventoryDisplay = new List<SiloInventoryEntry>();
     
-    // Kod tarafında hızlı işlem için Sözlük
-    private Dictionary<ResourceType, int> siloInventory = new Dictionary<ResourceType, int>();
+    // --- DEĞİŞİKLİK: Sözlük Anahtarı ---
+    private Dictionary<ResourceData, int> siloInventory = new Dictionary<ResourceData, int>();
+    // -----------------------------------
 
     [Header("İzleme")]
     [SerializeField] private int currentActiveWorkers = 0;
@@ -59,15 +58,13 @@ public class SiloController : MonoBehaviour
         StartCoroutine(SmartMonitorRoutine());
     }
 
-    // ... (Rutinler aynı, sadece HandleWorkerReturnedHome değişti)
-    
     private IEnumerator SmartMonitorRoutine()
     {
         while (true)
         {
             CalculateAvailableResources();
             ManageWorkforce();
-            yield return new WaitForSeconds(2.0f); // Scan interval
+            yield return new WaitForSeconds(2.0f); 
         }
     }
     
@@ -138,28 +135,31 @@ public class SiloController : MonoBehaviour
     {
         SiloTargetData data = workerAssignments.ContainsKey(npc) ? workerAssignments[npc] : null;
         int collected = 0;
-        ResourceType type = ResourceType.None;
+        ResourceData resource = null;
 
         if (data != null && data.house != null)
         {
             int cap = npc.GetNpcData().maxCarryCapacity;
             collected = data.house.DecreaseCounter(cap);
-            if (collected > 0) type = data.house.GetResourceType();
+            if (collected > 0)
+            {
+                resource = data.house.GetProducedResource();
+            }
         }
         
-        npc.ReturnHome(collected, type);
+        npc.ReturnHome(collected, resource);
     }
 
-    // --- DEĞİŞİKLİK: Envanter İşleme ---
-    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceType type)
+    // --- DEĞİŞİKLİK: ResourceData İşleme ---
+    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceData resource)
     {
-        if (amount > 0 && type != ResourceType.None)
+        if (amount > 0 && resource != null)
         {
             // 1. Sözlüğe ekle
-            if (siloInventory.ContainsKey(type)) siloInventory[type] += amount;
-            else siloInventory.Add(type, amount);
+            if (siloInventory.ContainsKey(resource)) siloInventory[resource] += amount;
+            else siloInventory.Add(resource, amount);
 
-            // 2. Inspector Listesini Güncelle (Görsel)
+            // 2. Inspector Listesini Güncelle
             UpdateInventoryDisplay();
 
             // 3. Ev İstatistiğini Güncelle
@@ -169,7 +169,6 @@ public class SiloController : MonoBehaviour
             }
         }
 
-        // Durum kontrolü (Emeklilik veya devam)
         CalculateAvailableResources();
         int cap = siloData.npcDataToSpawn.maxCarryCapacity;
         int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
@@ -187,14 +186,13 @@ public class SiloController : MonoBehaviour
     
     private void UpdateInventoryDisplay()
     {
-        // Sözlükteki veriyi listeye kopyala (Inspector'da görmek için)
         inventoryDisplay.Clear();
         foreach (var kvp in siloInventory)
         {
-            inventoryDisplay.Add(new SiloInventoryEntry { type = kvp.Key, amount = kvp.Value });
+            inventoryDisplay.Add(new SiloInventoryEntry { resource = kvp.Key, amount = kvp.Value });
         }
     }
-    // ----------------------------------
+    // ---------------------------------------
 
     private void RetireWorker(FriendlyNpcAI npc)
     {

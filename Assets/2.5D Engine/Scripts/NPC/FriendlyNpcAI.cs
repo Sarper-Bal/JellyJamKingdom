@@ -1,8 +1,8 @@
 /*
- * DOST NPC MOTORU - v3.0 (Kaynak Tipi Destekli)
+ * DOST NPC MOTORU - v3.1 (ResourceData Destekli)
  * DEĞİŞİKLİKLER:
- * - 'currentPayloadType' eklendi.
- * - 'ReturnHome' ve 'OnArrivedAtHome' imzaları 'ResourceType' alacak şekilde güncellendi.
+ * - 'ResourceType' (Enum) kullanımları 'ResourceData' (ScriptableObject) ile değiştirildi.
+ * - 'ReturnHome' ve 'OnArrivedAtHome' imzaları güncellendi.
  */
 
 using UnityEngine;
@@ -11,9 +11,9 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
 {
     public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
     
-    // --- DEĞİŞİKLİK: Event artık (NPC, Miktar, Tip) döndürüyor ---
-    public event System.Action<FriendlyNpcAI, int, ResourceType> OnArrivedAtHome;
-    // ------------------------------------------------------------
+    // --- DEĞİŞİKLİK: Event artık ResourceData taşıyor ---
+    public event System.Action<FriendlyNpcAI, int, ResourceData> OnArrivedAtHome;
+    // ---------------------------------------------------
 
     private enum State { Idle, GoingToWork, ReturningHome }
     
@@ -28,7 +28,7 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
     
     // --- DEĞİŞİKLİK: Payload Verisi ---
     private int currentPayloadAmount = 0;
-    private ResourceType currentPayloadType = ResourceType.None;
+    private ResourceData currentPayloadResource = null; // <-- Enum yerine Class referansı
     // ----------------------------------
 
     private NpcPath currentPath = null;    
@@ -101,9 +101,9 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
             }
             else if (previousState == State.ReturningHome)
             {
-                // --- DEĞİŞİKLİK: Tipi de gönder ---
-                OnArrivedAtHome?.Invoke(this, currentPayloadAmount, currentPayloadType);
-                // ----------------------------------
+                // --- DEĞİŞİKLİK ---
+                OnArrivedAtHome?.Invoke(this, currentPayloadAmount, currentPayloadResource);
+                // ------------------
             }
         }
     }
@@ -120,7 +120,7 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
             }
             else { currentTarget = currentPath.waypoints[currentWaypointIndex]; }
         }
-        else // ReturningHome
+        else 
         {
             currentWaypointIndex--; 
             if (currentWaypointIndex < 0)
@@ -135,20 +135,20 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
     public void GoToWork()
     {
         currentPayloadAmount = 0;
-        currentPayloadType = ResourceType.None; // Sıfırla
+        currentPayloadResource = null; // Sıfırla
         currentState = State.GoingToWork;
         SetupPath(true);
     }
 
-    // --- DEĞİŞİKLİK: Tipi parametre olarak al ---
-    public void ReturnHome(int collectedAmount, ResourceType type)
+    // --- DEĞİŞİKLİK: ResourceData alıyor ---
+    public void ReturnHome(int collectedAmount, ResourceData resource)
     {
         currentPayloadAmount = collectedAmount;
-        currentPayloadType = type;
+        currentPayloadResource = resource;
         currentState = State.ReturningHome;
         SetupPath(false);
     }
-    // --------------------------------------------
+    // ---------------------------------------
 
     private void SetupPath(bool toWork)
     {

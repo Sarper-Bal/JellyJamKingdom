@@ -1,9 +1,8 @@
 /*
- * NPC EVİ - v4.0 (Kaynak Tipi Entegrasyonu)
+ * NPC EVİ - v4.1 (ResourceData Entegrasyonu)
  * DEĞİŞİKLİKLER:
- * - 'GetResourceType()' metodu eklendi.
- * - 'HandleNpcArrivedAtWork': Kaynak tipini belirleyip NPC'ye veriyor.
- * - 'HandleNpcArrivedAtHome': Gelen kaynağın tipini logluyor (veya işliyor).
+ * - 'GetResourceType' -> 'GetProducedResource' (ResourceData döner).
+ * - 'HandleNpcArrivedAtWork' ve 'HandleNpcArrivedAtHome' artık ResourceData kullanıyor.
  */
 
 using UnityEngine;
@@ -39,7 +38,6 @@ public class NpcHousing : MonoBehaviour
 
     private IEnumerator SpawnNpcs()
     {
-        // ... (Spawn mantığı aynı, kısaltıldı)
         Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
         Transform home = (spawnPoint != null) ? spawnPoint : transform;
         string tag = housingData.genericNpcPrefab.name;
@@ -73,55 +71,57 @@ public class NpcHousing : MonoBehaviour
         return transform; 
     }
     
-    // --- DEĞİŞİKLİK: Kaynak Tipi İşleme ---
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
     {
         FriendlyNpcData data = npc.GetNpcData();
-        if (data == null) { npc.ReturnHome(0, ResourceType.None); return; }
+        if (data == null) { npc.ReturnHome(0, null); return; }
         int capacity = data.maxCarryCapacity; 
 
         if (jobType == NpcJobType.GatherResource)
         {
-            // Toplama işi: Kendi ürettiğimiz kaynağı topluyoruz
-            StartCoroutine(WorkCycle(npc, capacity, housingData.producedResourceType));
+            // --- DEĞİŞİKLİK: Kendi ürettiğimiz ResourceData'yı gönderiyoruz ---
+            StartCoroutine(WorkCycle(npc, capacity, housingData.producedResource));
+            // ----------------------------------------------------------------
         }
         else if (jobType == NpcJobType.TransferResource)
         {
-            // Transfer işi: Hedef evden ne varsa onu alıyoruz
             int collected = 0;
-            ResourceType type = ResourceType.None;
+            ResourceData resource = null;
 
             if (houseTarget != null)
             {
                 collected = houseTarget.DecreaseCounter(capacity);
                 if (collected > 0)
                 {
-                    // Hedef evden kaynak tipini öğren
-                    type = houseTarget.GetResourceType();
+                    // --- DEĞİŞİKLİK: Hedef evin ResourceData'sını alıyoruz ---
+                    resource = houseTarget.GetProducedResource();
+                    // ---------------------------------------------------------
                 }
             }
-            // NPC'ye miktarı ve tipi ver
-            npc.ReturnHome(collected, type); 
+            npc.ReturnHome(collected, resource); 
         }
     }
     
-    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int amount, ResourceType type)
+    // --- DEĞİŞİKLİK: ResourceData parametresi ---
+    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int amount, ResourceData resource)
     {
         if (amount > 0)
         {
             tasksCompletedCounter += amount;
-            Debug.Log($"Ev ({name}): {amount} adet {type} geldi. Toplam: {tasksCompletedCounter}");
+            string resName = (resource != null) ? resource.resourceName : "Bilinmeyen";
+            Debug.Log($"Ev ({name}): {amount} adet {resName} geldi. Toplam: {tasksCompletedCounter}");
         }
         StartCoroutine(RestCycle(npc, housingData.restDuration));
     }
+    // --------------------------------------------
     
-    private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity, ResourceType type)
+    private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity, ResourceData resource)
     {
         if (resourceTarget != null) resourceTarget.TriggerInteraction();
         yield return new WaitForSeconds(resourceTarget.workDuration);
         if(npc != null) 
         {
-            npc.ReturnHome(capacity, type);
+            npc.ReturnHome(capacity, resource);
         }
     }
     
@@ -139,12 +139,12 @@ public class NpcHousing : MonoBehaviour
     public NpcHousingData GetHousingData() { return housingData; }
     public int GetResourceCount() { return tasksCompletedCounter; }
     
-    // --- YENİ METOT ---
-    public ResourceType GetResourceType() 
+    // --- DEĞİŞİKLİK: Yeni Metot ---
+    public ResourceData GetProducedResource() 
     { 
-        return housingData != null ? housingData.producedResourceType : ResourceType.None; 
+        return housingData != null ? housingData.producedResource : null; 
     }
-    // ------------------
+    // ------------------------------
 
     public Transform GetSpawnPoint() { return (spawnPoint != null) ? spawnPoint : transform; }
 

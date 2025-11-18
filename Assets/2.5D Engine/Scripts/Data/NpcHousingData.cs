@@ -12,9 +12,9 @@ public class NpcHousingData : ScriptableObject
     [Header("Davranış Ayarları")]
     public float restDuration = 3.0f;
     
-    // --- DEĞİŞİKLİK (v4.0) ---
+    // --- DEĞİŞİKLİK: Enum yerine ScriptableObject ---
     [Header("Ekonomi")]
-    [Tooltip("Bu evin ürettiği veya depoladığı kaynak tipi.")]
-    public ResourceType producedResourceType = ResourceType.None;
-    // -------------------------
+    [Tooltip("Bu evin ürettiği kaynak tipi (Asset).")]
+    public ResourceData producedResource; // <-- ResourceType yerine ResourceData
+    // -----------------------------------------------
 }
