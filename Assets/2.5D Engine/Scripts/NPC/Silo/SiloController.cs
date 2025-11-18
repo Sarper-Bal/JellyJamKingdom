@@ -1,11 +1,17 @@
 /*
- * SILO KONTROLCÜSÜ (Silo Controller) - v2.1 (Kapı Önü Hedefleme)
+ * SILO KONTROLCÜSÜ (Silo Controller) - v2.2 (Hedefe Özel Yollar)
+ * * GÖREVİ:
+ * - Silo'nun kaynak toplayacağı evleri ve bu evlere giden yolları yönetir.
  *
- * * DEĞİŞİKLİKLER (v2.1):
- * - 'SendWorkerToBestTarget' metodu güncellendi.
- * - Hedef belirlerken artık 'bestTarget.transform' yerine
- * 'bestTarget.GetSpawnPoint()' kullanılıyor.
- * - Bu sayede Silo NPC'leri hedef evin içine girmez, kapısında durur.
+ * * DEĞİŞİKLİKLER (v2.2):
+ * - YENİ SINIF: 'SiloTargetData'.
+ * - Bu sınıf, bir 'NpcHousing' (Ev) ve ona giden 'NpcPath' (Yol) çiftini tutar.
+ * - 'targetHouses' listesi, 'targets' (List<SiloTargetData>) olarak değiştirildi.
+ * - 'optionalPath' (Global yol) KALDIRILDI.
+ * - 'SendWorkerToBestTarget' metodu güncellendi:
+ * - Artık en zengin hedefi bulurken 'targets' listesini tarıyor.
+ * - NPC'yi göreve gönderirken, o hedefe özel atanmış yolu (target.path) kullanıyor.
+ * - 'CalculateAvailableResources' ve 'GetClosestHouse' metotları yeni liste yapısına uyarlandı.
  */
 
 using UnityEngine;
@@ -15,15 +21,31 @@ using System.Linq;
 
 public class SiloController : MonoBehaviour
 {
+    // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Veri Yapısı) ---
+    [System.Serializable]
+    public class SiloTargetData
+    {
+        [Tooltip("Kaynak toplanacak hedef ev.")]
+        public NpcHousing house;
+        
+        [Tooltip("Silo'dan bu eve giderken kullanılacak özel yol (Opsiyonel).")]
+        public NpcPath path;
+    }
+    // --- DEĞİŞİKLİK SONU ---
+
     [Header("Veri Kaynağı")]
     [SerializeField] private NpcHousingData housingData;
 
     [Header("Hedefler")]
-    [SerializeField] private List<NpcHousing> targetHouses;
+    // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Yeni Liste) ---
+    [Tooltip("Silo'nun kaynak toplayacağı evler ve yolları.")]
+    [SerializeField] private List<SiloTargetData> targets;
+    // [SerializeField] private List<NpcHousing> targetHouses; // <-- SİLİNDİ
+    // --- DEĞİŞİKLİK SONU ---
 
     [Header("Konumlandırma")]
     [SerializeField] private Transform spawnPoint;
-    [SerializeField] private NpcPath optionalPath;
+    // [SerializeField] private NpcPath optionalPath; // <-- SİLİNDİ (Artık her hedefin kendi yolu var)
 
     [Header("Akıllı Sistem Ayarları")]
     [SerializeField] private float scanInterval = 2.0f;
@@ -58,13 +80,17 @@ public class SiloController : MonoBehaviour
     private void CalculateAvailableResources()
     {
         resourcesWaitingToBeCollected = 0;
-        foreach (var house in targetHouses)
+        // --- DEĞİŞİKLİK (v2.2) ---
+        if (targets == null) return;
+        
+        foreach (var target in targets)
         {
-            if (house != null)
+            if (target.house != null)
             {
-                resourcesWaitingToBeCollected += house.GetResourceCount();
+                resourcesWaitingToBeCollected += target.house.GetResourceCount();
             }
         }
+        // ---
     }
 
     private void ManageWorkforce()
@@ -106,28 +132,39 @@ public class SiloController : MonoBehaviour
 
     private void SendWorkerToBestTarget(FriendlyNpcAI npc)
     {
-        NpcHousing bestTarget = targetHouses
-            .Where(h => h != null && h.GetResourceCount() > 0)
-            .OrderByDescending(h => h.GetResourceCount())
+        // --- DEĞİŞİKLİK BAŞLANGICI (v2.2 - Hedef Seçimi) ---
+        
+        // 1. 'targets' listesinden, evi (house) dolu olan ve kaynağı olanlar arasından
+        // en çok kaynağı olan 'SiloTargetData'yı bul.
+        SiloTargetData bestTargetData = targets
+            .Where(t => t.house != null && t.house.GetResourceCount() > 0)
+            .OrderByDescending(t => t.house.GetResourceCount())
             .FirstOrDefault();
 
         Transform targetTransform;
         Transform myHome = (spawnPoint != null) ? spawnPoint : transform;
+        
+        // Bu hedefe özel yol var mı?
+        NpcPath pathForThisTarget = null;
 
-        if (bestTarget != null)
+        if (bestTargetData != null)
         {
-            // --- DEĞİŞİKLİK (v2.1) ---
-            // Evin merkezine değil, spawn noktasına (kapı önüne) git
-            targetTransform = bestTarget.GetSpawnPoint(); // <-- DÜZELTİLDİ
-            // ---
+            // Hedefin kapısına git
+            targetTransform = bestTargetData.house.GetSpawnPoint();
+            
+            // Hedefin özel yolunu al
+            pathForThisTarget = bestTargetData.path;
         }
         else
         {
+            // Kaynak yoksa emekli et
             RetireWorker(npc);
             return;
         }
+        // --- DEĞİŞİKLİK SONU ---
 
-        npc.Activate(housingData.npcDataToSpawn, myHome, targetTransform, optionalPath);
+        // NPC'ye o hedefe özel yolu vererek gönder
+        npc.Activate(housingData.npcDataToSpawn, myHome, targetTransform, pathForThisTarget);
     }
 
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
@@ -149,9 +186,9 @@ public class SiloController : MonoBehaviour
         if (amount > 0)
         {
             totalStoredResources += amount;
+            // Debug.Log($"Silo: +{amount} kaynak. Toplam: {totalStoredResources}");
         }
 
-        // İş bittiğinde tekrar durum değerlendirmesi yap
         CalculateAvailableResources();
         int workerCapacity = housingData.npcDataToSpawn.maxCarryCapacity;
         int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
@@ -193,19 +230,22 @@ public class SiloController : MonoBehaviour
     {
         NpcHousing closest = null;
         float minDst = Mathf.Infinity;
-        foreach (var house in targetHouses)
+        
+        // --- DEĞİŞİKLİK (v2.2) ---
+        if (targets == null) return null;
+        
+        foreach (var targetData in targets)
         {
-            if (house == null) continue;
+            if (targetData.house == null) continue;
             
-            // Mesafeyi evin merkezine değil, spawn noktasına göre ölçmek daha hassas olabilir
-            // ama şimdilik transform yeterli.
-            float dst = Vector3.Distance(position, house.transform.position);
+            float dst = Vector3.Distance(position, targetData.house.transform.position);
             if (dst < minDst && dst < 5.0f) 
             {
                 minDst = dst;
-                closest = house;
+                closest = targetData.house;
             }
         }
+        // ---
         return closest;
     }
     
