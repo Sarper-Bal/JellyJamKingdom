@@ -18,6 +18,6 @@ MonoBehaviour:
   spawnInterval: 1.5
   resourceToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
   maxStorageCapacity: 50
-  sellInterval: 3
-  sellAmount: 1
-  restDuration: 2
+  sellInterval: 0
+  sellAmount: 0
+  restDuration: 0
