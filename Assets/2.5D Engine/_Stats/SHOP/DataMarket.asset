@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ed93992c31af482ba564370fa126467, type: 3}
   m_Name: DataMarket
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
-  genericNpcPrefab: {fileID: 0}
-  npcDataToSpawn: {fileID: 0}
-  populationCount: 3
+  genericNpcPrefab: {fileID: 2150025513644625521, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
+  npcDataToSpawn: {fileID: 11400000, guid: 05afd4dba22d847a9bd8cab93a3dd174, type: 2}
+  populationCount: 1
   spawnInterval: 1.5
-  resourceToSell: {fileID: 0}
+  resourceToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
   maxStorageCapacity: 50
   sellInterval: 3
   sellAmount: 1
