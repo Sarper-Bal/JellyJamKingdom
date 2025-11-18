@@ -1,15 +1,13 @@
 /*
- * NPC HAVUZ YÖNETİCİSİ (NPC POOLER)
+ * NPC HAVUZ YÖNETİCİSİ (NPC POOLER) - v1.2 (Tuple Hatası Düzeltildi)
  * GÖREVİ:
- * 1. Bir Singleton'dır (Merkezi Erişim Noktası).
- * 2. 'Awake()'te, sahnedeki TÜM 'NpcHousing' (Ev) script'lerini bulur
- * ve onlardan ihtiyaç listesini ('NpcHousingData') toplar.
- * 3. 'Start()' metodunda, toplanan bu ihtiyaçlara göre
- * (kaç Goblin, kaç Köylü) tüm havuzları 'Instantiate' ederek
- * yaratır ve 'SetActive(false)' yapar.
- * 4. 'NpcHousing' script'lerinin kullanması için 'SpawnFromPool'
- * metodu sunar.
- * 5. Bu sistem 'Enemy' 'ObjectPooler'ından tamamen bağımsızdır.
+ * - Sahnedeki Evleri ve Siloları tarar.
+ * - İhtiyaç duyulan toplam NPC sayısını hesaplar.
+ * - Oyun başında (Awake/Start) tüm NPC'leri yaratıp pasif havuza atar.
+ *
+ * * HATA DÜZELTMESİ (v1.2):
+ * - 'needs[poolTag].count' satırındaki derleme hatası giderildi.
+ * - Tuple elemanına erişirken garanti yöntem olan '.Item2' kullanıldı.
  */
 
 using UnityEngine;
@@ -19,17 +17,12 @@ public class NpcPooler : MonoBehaviour
 {
     public static NpcPooler Instance { get; private set; }
 
-    // Havuzları saklamak için bir yapı
-    // Key = Prefab'ın adı (veya 'poolTag')
-    // Value = O prefab'dan yaratılmış ve şu an pasif olan NPC'lerin Kuyruğu
+    // Key = Prefab Adı, Value = NPC Kuyruğu
     private Dictionary<string, Queue<FriendlyNpcAI>> poolDictionary;
-    
-    // NPC'lerin Hiyerarşi'de düzenli durması için
     private Transform poolParent;
 
     private void Awake()
     {
-        // Singleton Kurulumu
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -40,77 +33,73 @@ public class NpcPooler : MonoBehaviour
         poolDictionary = new Dictionary<string, Queue<FriendlyNpcAI>>();
         poolParent = new GameObject("NpcPool").transform;
         
-        // Gerekli sayıda NPC'yi hesapla
+        // İhtiyaçları hesapla ve havuzu doldur
         CalculateTotalNeeds();
     }
 
-    /// <summary>
-    /// Sahnedeki tüm 'NpcHousing' evlerini bularak
-    /// toplam havuz ihtiyacını hesaplar.
-    /// </summary>
     private void CalculateTotalNeeds()
     {
-        // Geçici bir sözlük (Dictionary) kullanarak hangi prefab'dan
-        // kaç tane gerektiğini hesaplayalım.
-        Dictionary<string, (GameObject prefab, int count)> needs = 
+        // (GameObject, int) türünde bir Tuple sözlüğü
+        // Item1 = Prefab, Item2 = Sayı
+        Dictionary<string, (GameObject, int)> needs = 
             new Dictionary<string, (GameObject, int)>();
 
-        // 1. Sahnedeki tüm Evleri bul
+        // 1. Evleri (NpcHousing) Tara
         NpcHousing[] allHouses = FindObjectsOfType<NpcHousing>();
-        
-        Debug.Log($"NpcPooler: {allHouses.Length} adet Ev bulundu. İhtiyaçlar hesaplanıyor...");
-
         foreach (NpcHousing house in allHouses)
         {
-            NpcHousingData data = house.GetHousingData();
-            if (data == null || data.genericNpcPrefab == null)
-            {
-                 Debug.LogWarning($"Ev ({house.name}) 'Housing Data'sı veya 'Prefab'ı atanmamış.", house);
-                 continue;
-            }
-
-            string poolTag = data.genericNpcPrefab.name;
-            int count = data.populationCount;
-
-            if (!needs.ContainsKey(poolTag))
-            {
-                // Bu prefab (örn: 'GenericNpc.prefab')
-                // listeye ilk defa ekleniyor
-                needs.Add(poolTag, (data.genericNpcPrefab, count));
-            }
-            else
-            {
-                // Bu prefab zaten listedeydi (örn: başka bir ev de
-                // 'GenericNpc.prefab' kullanıyor), sayısını artır
-                needs[poolTag] = (data.genericNpcPrefab, needs[poolTag].count + count);
-            }
+            AddNeedsFromData(needs, house.GetHousingData(), house.name);
         }
         
-        // 2. Havuzları Ön-Yükle (Prewarm)
-        // 'Start()' içinde değil 'Awake' sonunda yapıyoruz ki,
-        // Evler 'Start()' dediğinde havuz hazır olsun.
+        // 2. Siloları (SiloController) Tara
+        SiloController[] allSilos = FindObjectsOfType<SiloController>();
+        foreach (SiloController silo in allSilos)
+        {
+            AddNeedsFromData(needs, silo.GetHousingData(), silo.name);
+        }
+        
+        // Havuzları oluştur
         PrewarmPools(needs);
     }
 
-    /// <summary>
-    /// Hesaplanan ihtiyaçlara göre tüm NPC'leri 'Instantiate' eder
-    /// ve pasif olarak havuza atar.
-    /// </summary>
+    private void AddNeedsFromData(Dictionary<string, (GameObject, int)> needs, NpcHousingData data, string ownerName)
+    {
+        if (data == null || data.genericNpcPrefab == null)
+        {
+             return;
+        }
+
+        string poolTag = data.genericNpcPrefab.name;
+        int count = data.populationCount;
+
+        if (!needs.ContainsKey(poolTag))
+        {
+            // Listeye yeni ekle
+            needs.Add(poolTag, (data.genericNpcPrefab, count));
+        }
+        else
+        {
+            // --- DÜZELTME BURADA ---
+            // Eski kod: needs[poolTag].count 
+            // Yeni kod: needs[poolTag].Item2 (Item2 = int count demektir)
+            int currentCount = needs[poolTag].Item2;
+            
+            needs[poolTag] = (data.genericNpcPrefab, currentCount + count);
+        }
+    }
+
     private void PrewarmPools(Dictionary<string, (GameObject prefab, int count)> needs)
     {
         foreach (var entry in needs)
         {
             string poolTag = entry.Key;
-            GameObject prefab = entry.Value.prefab;
-            int count = entry.Value.count;
+            // Tuple elemanlarına burada da Item1 ve Item2 diyebiliriz veya deconstruct edebiliriz
+            GameObject prefab = entry.Value.prefab; // veya entry.Value.Item1
+            int count = entry.Value.count;          // veya entry.Value.Item2
             
-            Debug.Log($"NpcPooler: '{poolTag}' havuzu {count} adet NPC ile yaratılıyor...");
-
-            // Havuz için bir alt-obje oluştur (daha düzenli)
             Transform prefabParent = new GameObject(poolTag + " Pool").transform;
             prefabParent.SetParent(poolParent);
             
-            // Havuz kuyruğunu (Queue) oluştur
             Queue<FriendlyNpcAI> npcQueue = new Queue<FriendlyNpcAI>();
 
             for (int i = 0; i < count; i++)
@@ -118,73 +107,56 @@ public class NpcPooler : MonoBehaviour
                 GameObject npcGO = Instantiate(prefab, prefabParent);
                 FriendlyNpcAI ai = npcGO.GetComponent<FriendlyNpcAI>();
                 
-                // (Emin olmak için havuz arayüzünü uygulayıp uygulamadığını kontrol edelim)
-                if (ai == null || !(ai is IPooledNpc))
+                if (ai != null)
                 {
-                     Debug.LogError($"'{prefab.name}' prefab'ı 'FriendlyNpcAI' " +
-                                      "script'ini içermiyor veya 'IPooledNpc' arayüzünü uygulamıyor!", prefab);
-                     Destroy(npcGO);
-                     continue;
+                    npcGO.SetActive(false);
+                    npcQueue.Enqueue(ai);
                 }
-                
-                npcGO.SetActive(false); // Pasif olarak havuza ekle
-                npcQueue.Enqueue(ai);
+                else
+                {
+                     Destroy(npcGO);
+                }
             }
-            
-            // Dolu kuyruğu ana sözlüğe ekle
             poolDictionary.Add(poolTag, npcQueue);
         }
     }
 
-    /// <summary>
-    /// Havuzdan bir NPC'yi çeker, aktive eder ve döndürür.
-    /// </summary>
     public FriendlyNpcAI SpawnFromPool(string poolTag, Vector3 position, Quaternion rotation)
     {
-        if (!poolDictionary.ContainsKey(poolTag))
+        if (!poolDictionary.ContainsKey(poolTag) || poolDictionary[poolTag].Count == 0)
         {
-            Debug.LogError($"NpcPooler: '{poolTag}' adında bir havuz bulunamadı!");
+            // Eğer havuz boşaldıysa ve acil lazımsa burada yeni yaratılabilir (Opsiyonel)
             return null;
         }
 
-        if (poolDictionary[poolTag].Count == 0)
-        {
-            Debug.LogError($"NpcPooler: '{poolTag}' havuzu boşaldı! " +
-                             "Daha fazla NPC yaratılmalı (Dinamik büyüme henüz eklenmedi).");
-            return null;
-        }
-
-        // 1. Havuzdan çek
         FriendlyNpcAI npcToSpawn = poolDictionary[poolTag].Dequeue();
         
-        // 2. Aktive et
-        npcToSpawn.gameObject.SetActive(true);
         npcToSpawn.transform.position = position;
         npcToSpawn.transform.rotation = rotation;
+        npcToSpawn.gameObject.SetActive(true);
         
-        // 3. NPC'nin kendi 'Spawn' olayını tetikle
-        (npcToSpawn as IPooledNpc).OnNpcSpawned();
+        if(npcToSpawn is IPooledNpc pooledNpc)
+        {
+            pooledNpc.OnNpcSpawned();
+        }
         
         return npcToSpawn;
     }
 
-    /// <summary>
-    /// Bir NPC'yi havuza geri döndürür.
-    /// (Not: v2.1 yapısında bu metot henüz çağrılmıyor,
-    /// ama ileride sistem durdurulursa diye hazır)
-    /// </summary>
     public void ReturnToPool(string poolTag, FriendlyNpcAI npc)
     {
         if (!poolDictionary.ContainsKey(poolTag))
         {
-            Debug.LogWarning($"NpcPooler: '{poolTag}' havuzuna dönme isteği geldi " +
-                             "ancak böyle bir havuz yok.");
-            Destroy(npc.gameObject); // Havuz yoksa yok et
+            Destroy(npc.gameObject);
             return;
         }
         
         npc.gameObject.SetActive(false);
-        npc.transform.SetParent(poolParent.Find(poolTag + " Pool")); // Hiyerarşide düzenle
+        // Pool parent'ın altına geri taşı ki hiyerarşi temiz kalsın
+        Transform specificPoolParent = poolParent.Find(poolTag + " Pool");
+        if (specificPoolParent != null)
+            npc.transform.SetParent(specificPoolParent);
+            
         poolDictionary[poolTag].Enqueue(npc);
     }
 }
