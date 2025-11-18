@@ -12,5 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b90190aec5abb44ea84db2e1e2a14c11, type: 3}
   m_Name: Wood
   m_EditorClassIdentifier: Assembly-CSharp::ResourceData
-  resourceName: 
+  resourceName: Wood
   icon: {fileID: 0}

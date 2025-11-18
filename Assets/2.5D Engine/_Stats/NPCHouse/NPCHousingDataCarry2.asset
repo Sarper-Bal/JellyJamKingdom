@@ -17,4 +17,4 @@ MonoBehaviour:
   populationCount: 1
   spawnInterval: 1.5
   restDuration: 3
-  producedResourceType: 2
+  producedResource: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
