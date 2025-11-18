@@ -18,3 +18,6 @@ MonoBehaviour:
   spawnInterval: 1.5
   restDuration: 3
   producedResource: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
+  requiresConversion: 1
+  conversionRate: 2
+  conversionTime: 2
