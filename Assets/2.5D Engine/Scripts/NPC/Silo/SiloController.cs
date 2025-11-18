@@ -1,13 +1,9 @@
 /*
- * SILO KONTROLCÜSÜ (Silo Controller) - v2.4 (Detaylı İstatistikler)
- * * * DEĞİŞİKLİKLER (v2.4):
- * - 'SiloTargetData' sınıfına 'collectedAmount' eklendi. Artık her evden
- * ne kadar kaynak toplandığı ayrı ayrı tutuluyor.
- * - 'workerAssignments' (Dictionary) eklendi. Hangi işçinin hangi evde
- * çalıştığını takip eder.
- * - 'SendWorkerToBestTarget' ve 'HandleWorkerReturnedHome' metotları,
- * bu takip sistemini güncelleyecek şekilde revize edildi.
- * - 'targets' listesindeki sayaçları Inspector'dan canlı izleyebilirsiniz.
+ * SILO KONTROLCÜSÜ - v3.0 (Envanter Sistemi)
+ * DEĞİŞİKLİKLER:
+ * - 'SiloInventoryEntry' struct'ı eklendi (Inspector'da görmek için).
+ * - 'siloInventory' (Dictionary) eklendi (Hızlı erişim için).
+ * - 'HandleWorkerReturnedHome': Gelen kaynağın tipine göre ilgili kasayı artırıyor.
  */
 
 using UnityEngine;
@@ -20,108 +16,90 @@ public class SiloController : MonoBehaviour
     [System.Serializable]
     public class SiloTargetData
     {
-        [Tooltip("Kaynak toplanacak hedef ev.")]
         public NpcHousing house;
-        
-        [Tooltip("Silo'dan bu eve giderken kullanılacak özel yol.")]
         public NpcPath path;
-
-        // --- DEĞİŞİKLİK BAŞLANGICI (v2.4) ---
-        [Tooltip("Bu evden şu ana kadar toplanan toplam kaynak miktarı.")]
-        public int collectedAmount = 0; // İstatistik Sayacı
-        // --- DEĞİŞİKLİK SONU ---
+        public int collectedAmount;
     }
 
-    [Header("Veri Kaynağı")]
+    // --- DEĞİŞİKLİK: Envanter Görünümü ---
+    [System.Serializable]
+    public class SiloInventoryEntry
+    {
+        public ResourceType type;
+        public int amount;
+    }
+    // -------------------------------------
+
+    [Header("Veri")]
     [SerializeField] private SiloData siloData;
 
-    [Header("Hedefler ve İstatistikler")]
-    [Tooltip("Hedef evler ve her birinden toplanan kaynaklar.")]
+    [Header("Hedefler")]
     [SerializeField] private List<SiloTargetData> targets;
 
-    [Header("Konumlandırma")]
+    [Header("Konum")]
     [SerializeField] private Transform spawnPoint;
 
-    [Header("Akıllı Sistem Ayarları")]
-    [SerializeField] private float scanInterval = 2.0f;
+    [Header("Silo Envanteri")]
+    // Inspector'da görmek için Liste
+    [SerializeField] private List<SiloInventoryEntry> inventoryDisplay = new List<SiloInventoryEntry>();
+    
+    // Kod tarafında hızlı işlem için Sözlük
+    private Dictionary<ResourceType, int> siloInventory = new Dictionary<ResourceType, int>();
 
-    [Header("Silo Genel Envanteri")]
-    [SerializeField] private int totalStoredResources = 0;
+    [Header("İzleme")]
     [SerializeField] private int currentActiveWorkers = 0;
     [SerializeField] private int resourcesWaitingToBeCollected = 0;
 
     private List<FriendlyNpcAI> activeWorkers = new List<FriendlyNpcAI>();
-
-    // --- DEĞİŞİKLİK BAŞLANGICI (v2.4) ---
-    // Hangi işçinin hangi hedef (TargetData) üzerinde çalıştığını tutan "Hafıza"
     private Dictionary<FriendlyNpcAI, SiloTargetData> workerAssignments = new Dictionary<FriendlyNpcAI, SiloTargetData>();
-    // --- DEĞİŞİKLİK SONU ---
 
     private void Start()
     {
-        if (siloData == null)
-        {
-            Debug.LogError($"Silo ({gameObject.name}): 'Silo Data' atanmamış!", this);
-            return;
-        }
+        if (siloData == null) return;
         StartCoroutine(SmartMonitorRoutine());
     }
 
+    // ... (Rutinler aynı, sadece HandleWorkerReturnedHome değişti)
+    
     private IEnumerator SmartMonitorRoutine()
     {
         while (true)
         {
             CalculateAvailableResources();
             ManageWorkforce();
-            yield return new WaitForSeconds(scanInterval);
+            yield return new WaitForSeconds(2.0f); // Scan interval
         }
     }
-
+    
     private void CalculateAvailableResources()
     {
         resourcesWaitingToBeCollected = 0;
         if (targets == null) return;
-        
-        foreach (var target in targets)
-        {
-            if (target.house != null)
-            {
-                resourcesWaitingToBeCollected += target.house.GetResourceCount();
-            }
-        }
+        foreach (var t in targets) { if (t.house != null) resourcesWaitingToBeCollected += t.house.GetResourceCount(); }
     }
-
+    
     private void ManageWorkforce()
     {
-        int workerCapacity = siloData.npcDataToSpawn.maxCarryCapacity;
-        int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
-        neededWorkers = Mathf.Clamp(neededWorkers, 0, siloData.populationCount);
-
-        int workersToSpawn = neededWorkers - activeWorkers.Count;
-
-        if (workersToSpawn > 0)
-        {
-            StartCoroutine(SpawnBatch(workersToSpawn));
-        }
+        int cap = siloData.npcDataToSpawn.maxCarryCapacity;
+        int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
+        needed = Mathf.Clamp(needed, 0, siloData.populationCount);
+        int toSpawn = needed - activeWorkers.Count;
+        if (toSpawn > 0) StartCoroutine(SpawnBatch(toSpawn));
     }
-
+    
     private IEnumerator SpawnBatch(int count)
     {
-        string poolTag = siloData.genericNpcPrefab.name;
+        string tag = siloData.genericNpcPrefab.name;
         Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
-
         for (int i = 0; i < count; i++)
         {
-            FriendlyNpcAI npc = NpcPooler.Instance.SpawnFromPool(poolTag, pos, Quaternion.identity);
-
+            FriendlyNpcAI npc = NpcPooler.Instance.SpawnFromPool(tag, pos, Quaternion.identity);
             if (npc != null)
             {
                 activeWorkers.Add(npc);
                 currentActiveWorkers = activeWorkers.Count;
-
                 npc.OnArrivedAtWork += HandleWorkerArrivedAtTarget;
                 npc.OnArrivedAtHome += HandleWorkerReturnedHome;
-
                 SendWorkerToBestTarget(npc);
             }
             yield return new WaitForSeconds(0.2f);
@@ -130,105 +108,74 @@ public class SiloController : MonoBehaviour
 
     private void SendWorkerToBestTarget(FriendlyNpcAI npc)
     {
-        // En zengin hedefi bul
-        SiloTargetData bestTargetData = targets
+        SiloTargetData best = targets
             .Where(t => t.house != null && t.house.GetResourceCount() > 0)
             .OrderByDescending(t => t.house.GetResourceCount())
             .FirstOrDefault();
 
-        Transform targetTransform;
-        Transform myHome = (spawnPoint != null) ? spawnPoint : transform;
-        NpcPath pathForThisTarget = null;
+        Transform dest;
+        Transform home = (spawnPoint != null) ? spawnPoint : transform;
+        NpcPath path = null;
 
-        if (bestTargetData != null)
+        if (best != null)
         {
-            targetTransform = bestTargetData.house.GetSpawnPoint();
-            pathForThisTarget = bestTargetData.path;
-            
-            // --- DEĞİŞİKLİK BAŞLANGICI (v2.4) ---
-            // İşçiyi ve hedefini deftere kaydet
-            if (workerAssignments.ContainsKey(npc))
-            {
-                workerAssignments[npc] = bestTargetData;
-            }
-            else
-            {
-                workerAssignments.Add(npc, bestTargetData);
-            }
-            // --- DEĞİŞİKLİK SONU ---
+            dest = best.house.GetSpawnPoint();
+            path = best.path;
+            if (!workerAssignments.ContainsKey(npc)) workerAssignments.Add(npc, best);
+            else workerAssignments[npc] = best;
         }
         else
         {
-            // Kaynak yoksa kaydı sil ve emekli et
             if (workerAssignments.ContainsKey(npc)) workerAssignments.Remove(npc);
             RetireWorker(npc);
             return;
         }
 
-        npc.Activate(siloData.npcDataToSpawn, myHome, targetTransform, pathForThisTarget);
+        npc.Activate(siloData.npcDataToSpawn, home, dest, path);
     }
 
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc)
     {
-        // Not: Artık "En Yakın Evi" aramamıza gerek yok, 
-        // 'workerAssignments' sözlüğünden nereye gönderdiğimizi biliyoruz.
-        // Ancak güvenlik için GetClosestHouse'u tutabiliriz veya direkt sözlükten bakabiliriz.
-        // Tutarlılık için sözlükten hedef verisini alıp, ev referansını kullanalım.
-
-        SiloTargetData assignedData = null;
-        if (workerAssignments.ContainsKey(npc))
-        {
-            assignedData = workerAssignments[npc];
-        }
-
+        SiloTargetData data = workerAssignments.ContainsKey(npc) ? workerAssignments[npc] : null;
         int collected = 0;
+        ResourceType type = ResourceType.None;
 
-        if (assignedData != null && assignedData.house != null)
+        if (data != null && data.house != null)
         {
-            int capacity = npc.GetNpcData().maxCarryCapacity;
-            collected = assignedData.house.DecreaseCounter(capacity);
+            int cap = npc.GetNpcData().maxCarryCapacity;
+            collected = data.house.DecreaseCounter(cap);
+            if (collected > 0) type = data.house.GetResourceType();
         }
-        else
-        {
-            // Yedek plan: Sözlükte yoksa en yakını bul (eski yöntem)
-            NpcHousing closest = GetClosestHouse(npc.transform.position);
-            if (closest != null)
-            {
-                int capacity = npc.GetNpcData().maxCarryCapacity;
-                collected = closest.DecreaseCounter(capacity);
-            }
-        }
-
-        npc.ReturnHome(collected);
+        
+        npc.ReturnHome(collected, type);
     }
 
-    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount)
+    // --- DEĞİŞİKLİK: Envanter İşleme ---
+    private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceType type)
     {
-        if (amount > 0)
+        if (amount > 0 && type != ResourceType.None)
         {
-            // 1. Genel Depoya Ekle
-            totalStoredResources += amount;
+            // 1. Sözlüğe ekle
+            if (siloInventory.ContainsKey(type)) siloInventory[type] += amount;
+            else siloInventory.Add(type, amount);
 
-            // --- DEĞİŞİKLİK BAŞLANGICI (v2.4) ---
-            // 2. Özel (Ev Bazlı) İstatistiğe Ekle
+            // 2. Inspector Listesini Güncelle (Görsel)
+            UpdateInventoryDisplay();
+
+            // 3. Ev İstatistiğini Güncelle
             if (workerAssignments.ContainsKey(npc))
             {
-                SiloTargetData sourceData = workerAssignments[npc];
-                if (sourceData != null)
-                {
-                    sourceData.collectedAmount += amount;
-                }
+                workerAssignments[npc].collectedAmount += amount;
             }
-            // --- DEĞİŞİKLİK SONU ---
         }
 
-        // Yeniden Değerlendirme
+        // Durum kontrolü (Emeklilik veya devam)
         CalculateAvailableResources();
-        int workerCapacity = siloData.npcDataToSpawn.maxCarryCapacity;
-        int neededWorkers = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / workerCapacity);
-        neededWorkers = Mathf.Clamp(neededWorkers, 0, siloData.populationCount);
+        int cap = siloData.npcDataToSpawn.maxCarryCapacity;
+        int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
+        needed = Mathf.Clamp(needed, 0, siloData.populationCount);
 
-        if (activeWorkers.Count > neededWorkers || resourcesWaitingToBeCollected == 0)
+        if (activeWorkers.Count > needed || resourcesWaitingToBeCollected == 0)
         {
             RetireWorker(npc);
         }
@@ -237,51 +184,34 @@ public class SiloController : MonoBehaviour
             StartCoroutine(RestAndRestart(npc));
         }
     }
+    
+    private void UpdateInventoryDisplay()
+    {
+        // Sözlükteki veriyi listeye kopyala (Inspector'da görmek için)
+        inventoryDisplay.Clear();
+        foreach (var kvp in siloInventory)
+        {
+            inventoryDisplay.Add(new SiloInventoryEntry { type = kvp.Key, amount = kvp.Value });
+        }
+    }
+    // ----------------------------------
 
     private void RetireWorker(FriendlyNpcAI npc)
     {
         npc.OnArrivedAtWork -= HandleWorkerArrivedAtTarget;
         npc.OnArrivedAtHome -= HandleWorkerReturnedHome;
-
         activeWorkers.Remove(npc);
         currentActiveWorkers = activeWorkers.Count;
-        
-        // --- DEĞİŞİKLİK (v2.4) ---
-        // Sözlükten kaydı sil
         if (workerAssignments.ContainsKey(npc)) workerAssignments.Remove(npc);
-        // ---
-
-        string poolTag = siloData.genericNpcPrefab.name;
-        NpcPooler.Instance.ReturnToPool(poolTag, npc);
+        
+        string tag = siloData.genericNpcPrefab.name;
+        NpcPooler.Instance.ReturnToPool(tag, npc);
     }
 
     private IEnumerator RestAndRestart(FriendlyNpcAI npc)
     {
         yield return new WaitForSeconds(siloData.restDuration);
-        
-        if (npc.gameObject.activeInHierarchy) 
-        {
-            SendWorkerToBestTarget(npc);
-        }
-    }
-
-    private NpcHousing GetClosestHouse(Vector3 position)
-    {
-        NpcHousing closest = null;
-        float minDst = Mathf.Infinity;
-        if (targets == null) return null;
-        
-        foreach (var targetData in targets)
-        {
-            if (targetData.house == null) continue;
-            float dst = Vector3.Distance(position, targetData.house.transform.position);
-            if (dst < minDst && dst < 5.0f) 
-            {
-                minDst = dst;
-                closest = targetData.house;
-            }
-        }
-        return closest;
+        if (npc.gameObject.activeInHierarchy) SendWorkerToBestTarget(npc);
     }
     
     public SiloData GetSiloData() { return siloData; }

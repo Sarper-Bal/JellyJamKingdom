@@ -17,3 +17,4 @@ MonoBehaviour:
   populationCount: 3
   spawnInterval: 1.5
   restDuration: 1
+  producedResourceType: 1

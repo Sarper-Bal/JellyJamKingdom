@@ -2143,16 +2143,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e9484016cf34645e9a91cf2c691342b6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SiloController
-  housingData: {fileID: 11400000, guid: dadab6f9fd2ad492c92b6d6ed0c9ddb3, type: 2}
-  targetHouses:
-  - {fileID: 735447905}
-  - {fileID: 290435000}
-  - {fileID: 1234096937}
-  - {fileID: 1420429488}
+  siloData: {fileID: 11400000, guid: bdbf29ec5d3844b2dbf0e28a41417bff, type: 2}
+  targets:
+  - house: {fileID: 735447905}
+    path: {fileID: 1953460727}
+    collectedAmount: 0
+  - house: {fileID: 1234096937}
+    path: {fileID: 0}
+    collectedAmount: 0
+  - house: {fileID: 1420429488}
+    path: {fileID: 0}
+    collectedAmount: 0
+  - house: {fileID: 290435000}
+    path: {fileID: 0}
+    collectedAmount: 0
   spawnPoint: {fileID: 1008945305}
-  optionalPath: {fileID: 1953460727}
-  scanInterval: 2
-  totalStoredResources: 0
+  inventoryDisplay: []
   currentActiveWorkers: 0
   resourcesWaitingToBeCollected: 0
 --- !u!4 &368162601
@@ -7467,7 +7473,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 868788f80070945db8c4789f6b657e37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcHousing
-  housingData: {fileID: 11400000, guid: dadab6f9fd2ad492c92b6d6ed0c9ddb3, type: 2}
+  housingData: {fileID: 11400000, guid: c499caefbcfa14d69a556463c3835598, type: 2}
   jobType: 0
   resourceTarget: {fileID: 1359484869}
   houseTarget: {fileID: 290435000}

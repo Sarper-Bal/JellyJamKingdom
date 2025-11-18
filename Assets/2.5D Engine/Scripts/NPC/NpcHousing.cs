@@ -1,10 +1,9 @@
 /*
- * NPC EVİ (BEYİN/YÖNETİCİ) - v3.6 (Spawn Point Erişimi)
- *
- * * DEĞİŞİKLİKLER (v3.6):
- * - YENİ METOT: 'GetSpawnPoint()'.
- * - Bu public metot, Silo gibi dış sistemlerin evin "kapı önü" (spawnPoint)
- * - noktasına erişmesini sağlar. Eğer spawnPoint atanmamışsa, evin merkezini döner.
+ * NPC EVİ - v4.0 (Kaynak Tipi Entegrasyonu)
+ * DEĞİŞİKLİKLER:
+ * - 'GetResourceType()' metodu eklendi.
+ * - 'HandleNpcArrivedAtWork': Kaynak tipini belirleyip NPC'ye veriyor.
+ * - 'HandleNpcArrivedAtHome': Gelen kaynağın tipini logluyor (veya işliyor).
  */
 
 using UnityEngine;
@@ -13,29 +12,23 @@ using System.Collections.Generic;
 
 public class NpcHousing : MonoBehaviour
 {
-    [Header("Veri Kaynağı (ZORUNLU)")]
+    [Header("Veri")]
     [SerializeField] private NpcHousingData housingData;
     
-    [Header("Davranış (Prefab Üzerinde)")]
+    [Header("Davranış")]
     [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource; 
-    
-    [Header("Sahne Hedefleri (Prefab Üzerinde)")]
     [SerializeField] private WorkSpotInteractable resourceTarget;
-    
-    [Tooltip("EĞER JobType = TransferResource ise, NPC'lerin gideceği hedef 'Ev'.")]
     [SerializeField] public NpcHousing houseTarget; 
     
+    [Header("Konum")]
     [SerializeField] private Transform spawnPoint; 
     [SerializeField] private NpcPath optionalNpcPath; 
     
-    [Header("Runtime İstatistikleri")]
-    [SerializeField]
-    private int tasksCompletedCounter = 0; 
+    [Header("İstatistik")]
+    [SerializeField] private int tasksCompletedCounter = 0; 
     
     public enum NpcJobType { GatherResource, TransferResource }
-    
     public event System.Action<FriendlyNpcAI, NpcHousing> OnNpcReadyToWork;
-
     private List<FriendlyNpcAI> managedNpcs = new List<FriendlyNpcAI>();
 
     private void Start()
@@ -46,23 +39,19 @@ public class NpcHousing : MonoBehaviour
 
     private IEnumerator SpawnNpcs()
     {
-        Vector3 positionToSpawn = (spawnPoint != null) ? spawnPoint.position : transform.position;
-        Transform homeTarget = (spawnPoint != null) ? spawnPoint : this.transform;
-        string poolTag = housingData.genericNpcPrefab.name;
+        // ... (Spawn mantığı aynı, kısaltıldı)
+        Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
+        Transform home = (spawnPoint != null) ? spawnPoint : transform;
+        string tag = housingData.genericNpcPrefab.name;
 
         for (int i = 0; i < housingData.populationCount; i++)
         {
-            FriendlyNpcAI ai = NpcPooler.Instance.SpawnFromPool(
-                poolTag, 
-                positionToSpawn, 
-                Quaternion.identity
-            );
-
+            FriendlyNpcAI ai = NpcPooler.Instance.SpawnFromPool(tag, pos, Quaternion.identity);
             if (ai != null)
             {
                 OnNpcReadyToWork?.Invoke(ai, this);
-                Transform workTarget = DetermineWorkTarget();
-                ai.Activate(housingData.npcDataToSpawn, homeTarget, workTarget, optionalNpcPath); 
+                Transform work = DetermineWorkTarget();
+                ai.Activate(housingData.npcDataToSpawn, home, work, optionalNpcPath); 
                 
                 ai.OnArrivedAtWork -= HandleNpcArrivedAtWork; 
                 ai.OnArrivedAtHome -= HandleNpcArrivedAtHome;
@@ -78,94 +67,94 @@ public class NpcHousing : MonoBehaviour
     private Transform DetermineWorkTarget()
     {
         if (jobType == NpcJobType.GatherResource && resourceTarget != null)
-        {
-            return (resourceTarget.interactionPoint != null) 
-                ? resourceTarget.interactionPoint 
-                : resourceTarget.transform;
-        }
+            return (resourceTarget.interactionPoint != null) ? resourceTarget.interactionPoint : resourceTarget.transform;
         else if (jobType == NpcJobType.TransferResource && houseTarget != null)
-        {
-            // Kendi sınıfımız olduğu için private alana erişebiliyoruz ama
-            // dışarıdan erişim için GetSpawnPoint kullanmak daha güvenlidir.
             return houseTarget.GetSpawnPoint();
-        }
         return transform; 
+    }
+    
+    // --- DEĞİŞİKLİK: Kaynak Tipi İşleme ---
+    private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
+    {
+        FriendlyNpcData data = npc.GetNpcData();
+        if (data == null) { npc.ReturnHome(0, ResourceType.None); return; }
+        int capacity = data.maxCarryCapacity; 
+
+        if (jobType == NpcJobType.GatherResource)
+        {
+            // Toplama işi: Kendi ürettiğimiz kaynağı topluyoruz
+            StartCoroutine(WorkCycle(npc, capacity, housingData.producedResourceType));
+        }
+        else if (jobType == NpcJobType.TransferResource)
+        {
+            // Transfer işi: Hedef evden ne varsa onu alıyoruz
+            int collected = 0;
+            ResourceType type = ResourceType.None;
+
+            if (houseTarget != null)
+            {
+                collected = houseTarget.DecreaseCounter(capacity);
+                if (collected > 0)
+                {
+                    // Hedef evden kaynak tipini öğren
+                    type = houseTarget.GetResourceType();
+                }
+            }
+            // NPC'ye miktarı ve tipi ver
+            npc.ReturnHome(collected, type); 
+        }
+    }
+    
+    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int amount, ResourceType type)
+    {
+        if (amount > 0)
+        {
+            tasksCompletedCounter += amount;
+            Debug.Log($"Ev ({name}): {amount} adet {type} geldi. Toplam: {tasksCompletedCounter}");
+        }
+        StartCoroutine(RestCycle(npc, housingData.restDuration));
+    }
+    
+    private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity, ResourceType type)
+    {
+        if (resourceTarget != null) resourceTarget.TriggerInteraction();
+        yield return new WaitForSeconds(resourceTarget.workDuration);
+        if(npc != null) 
+        {
+            npc.ReturnHome(capacity, type);
+        }
     }
     
     private IEnumerator RestCycle(FriendlyNpcAI npc, float duration)
     {
         yield return new WaitForSeconds(duration);
-        
         if(npc != null)
         {
             OnNpcReadyToWork?.Invoke(npc, this);
-            Transform newWorkTarget = DetermineWorkTarget();
-            
-            npc.Activate(housingData.npcDataToSpawn, (spawnPoint != null ? spawnPoint : transform), newWorkTarget, optionalNpcPath);
+            Transform newWork = DetermineWorkTarget();
+            npc.Activate(housingData.npcDataToSpawn, (spawnPoint != null ? spawnPoint : transform), newWork, optionalNpcPath);
         }
     }
-    
-    private void HandleNpcArrivedAtWork(FriendlyNpcAI npc)
-    {
-        FriendlyNpcData data = npc.GetNpcData();
-        if (data == null) { npc.ReturnHome(0); return; }
-        int capacity = data.maxCarryCapacity; 
-
-        if (jobType == NpcJobType.GatherResource)
-        {
-            StartCoroutine(WorkCycle(npc, capacity));
-        }
-        else if (jobType == NpcJobType.TransferResource)
-        {
-            int collectedAmount = 0;
-            if (houseTarget != null)
-            {
-                collectedAmount = houseTarget.DecreaseCounter(capacity);
-            }
-            if(npc != null) npc.ReturnHome(collectedAmount); 
-        }
-    }
-    
-    private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int collectedAmount)
-    {
-        if (collectedAmount > 0)
-        {
-            tasksCompletedCounter += collectedAmount;
-            Debug.Log($"Ev ({gameObject.name}): {collectedAmount} kaynak geldi. Toplam: {tasksCompletedCounter}.");
-        }
-        StartCoroutine(RestCycle(npc, housingData.restDuration));
-    }
-    
-    private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity)
-    {
-        if (resourceTarget != null) resourceTarget.TriggerInteraction();
-        yield return new WaitForSeconds(resourceTarget.workDuration);
-        if(npc != null) npc.ReturnHome(capacity);
-    }
-    
-    // --- PUBLIC METOTLAR ---
     
     public NpcHousingData GetHousingData() { return housingData; }
     public int GetResourceCount() { return tasksCompletedCounter; }
-
-    // --- DEĞİŞİKLİK BAŞLANGICI (v3.6 - Yeni Erişim Metodu) ---
-    /// <summary>
-    /// Silo veya diğer sistemlerin bu evin "kapı önü" noktasına erişmesi için.
-    /// </summary>
-    public Transform GetSpawnPoint()
-    {
-        // Eğer spawnPoint atanmışsa onu dön, yoksa evin merkezini dön
-        return (spawnPoint != null) ? spawnPoint : transform;
+    
+    // --- YENİ METOT ---
+    public ResourceType GetResourceType() 
+    { 
+        return housingData != null ? housingData.producedResourceType : ResourceType.None; 
     }
-    // --- DEĞİŞİKLİK SONU ---
+    // ------------------
+
+    public Transform GetSpawnPoint() { return (spawnPoint != null) ? spawnPoint : transform; }
 
     public void IncreaseCounter(int amount) { tasksCompletedCounter += amount; }
 
     public int DecreaseCounter(int amountToTake)
     {
         if (tasksCompletedCounter == 0) { return 0; }
-        int actualAmountTaken = Mathf.Min(tasksCompletedCounter, amountToTake);
-        tasksCompletedCounter -= actualAmountTaken;
-        return actualAmountTaken;
+        int actual = Mathf.Min(tasksCompletedCounter, amountToTake);
+        tasksCompletedCounter -= actual;
+        return actual;
     }
 }

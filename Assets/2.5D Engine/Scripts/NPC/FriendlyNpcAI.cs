@@ -1,84 +1,55 @@
 /*
- * DOST NPC YAPAY ZEKASI (MOTOR) - v2.1 (Sağlam Pathing + Havuzlu)
- *
- * * DEĞİŞİKLİKLER (v2.1):
- * - ': IPooledNpc' arayüzü eklendi.
- * - 'OnNpcSpawned()' metodu eklendi.
- * - 'Initialize()' metodu 'Activate()' olarak yeniden adlandırıldı.
- * 'NpcHousing' tarafından havuzdan çekilince çağrılacak.
- * - 'OnNpcSpawned()' metodu şimdilik boş, çünkü 'Activate()' metodu
- * 'NpcHousing' (Beyin) tarafından çağrıldığı için daha fazla
- * veriye (hedeflere) ihtiyaç duyuyor.
- * - v2.0'daki "Sağlam Pathing" mantığı ('UpdatePathTarget' vb.)
- * korundu.
+ * DOST NPC MOTORU - v3.0 (Kaynak Tipi Destekli)
+ * DEĞİŞİKLİKLER:
+ * - 'currentPayloadType' eklendi.
+ * - 'ReturnHome' ve 'OnArrivedAtHome' imzaları 'ResourceType' alacak şekilde güncellendi.
  */
 
 using UnityEngine;
 
-// --- DEĞİŞİKLİK BAŞLANGICI (v2.1 - Arayüz) ---
 public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
-// --- DEĞİŞİKLİK SONU ---
 {
-    // Event'ler (Değişiklik yok)
     public event System.Action<FriendlyNpcAI> OnArrivedAtWork;
-    public event System.Action<FriendlyNpcAI, int> OnArrivedAtHome;
+    
+    // --- DEĞİŞİKLİK: Event artık (NPC, Miktar, Tip) döndürüyor ---
+    public event System.Action<FriendlyNpcAI, int, ResourceType> OnArrivedAtHome;
+    // ------------------------------------------------------------
 
     private enum State { Idle, GoingToWork, ReturningHome }
     
-    [Header("Bileşen Referansları (Zorunlu)")]
+    [Header("Bileşenler")]
     [SerializeField] private SpriteRenderer spriteRenderer; 
     
-    // Anlık (Runtime) Veriler
     private FriendlyNpcData npcData;
     private Transform homeTransform;
     private Transform workSpotTransform;
     private State currentState = State.Idle;
     private Transform currentTarget;
+    
+    // --- DEĞİŞİKLİK: Payload Verisi ---
     private int currentPayloadAmount = 0;
+    private ResourceType currentPayloadType = ResourceType.None;
+    // ----------------------------------
 
-    // Opsiyonel Yol Takibi (Değişiklik yok)
     private NpcPath currentPath = null;    
     private int currentWaypointIndex = -1;   
     private bool isMovingOnPath = false;  
     
-    // Optimize mesafe kontrolü (Değişiklik yok)
     private float sqrArrivalDistanceThreshold;
     private const float ARRIVAL_DISTANCE_THRESHOLD = 0.1f;
 
-    // --- DEĞİŞİKLİK BAŞLANGICI (v2.1 - Arayüz Metodu) ---
-    /// <summary>
-    /// 'NpcPooler' tarafından 'SetActive(true)' yapıldıktan hemen sonra çağrılır.
-    /// </summary>
-    public void OnNpcSpawned()
-    {
-        // 'NpcHousing' (Beyin) 'Activate' metodunu çağıracağı için
-        // buranın şimdilik boş kalması normaldir.
-        currentState = State.Idle; // Harekete geçmeden önce bekle
-    }
-    // --- DEĞİŞİKLİK SONU ---
+    public void OnNpcSpawned() { currentState = State.Idle; }
 
     private void Awake()
     {
-        if (spriteRenderer == null)
-        {
-            Debug.LogError("FriendlyNpcAI: 'Sprite Renderer' alanı Inspector'dan atanmamış!", this);
-        }
+        if (spriteRenderer == null) Debug.LogError("FriendlyNpcAI: SpriteRenderer eksik!", this);
         sqrArrivalDistanceThreshold = ARRIVAL_DISTANCE_THRESHOLD * ARRIVAL_DISTANCE_THRESHOLD;
     }
 
-    /// <summary>
-    /// 'NpcHousing' (Ev) tarafından NPC havuzdan çekildikten
-    /// sonra çağrılır. (v2.1 - Adı 'Initialize'dan 'Activate'e değişti)
-    /// </summary>
     public void Activate(FriendlyNpcData data, Transform home, Transform workSpot, NpcPath path)
     {
         this.npcData = data;
-        if (this.npcData == null)
-        {
-            Debug.LogError("FriendlyNpcAI.Activate() 'FriendlyNpcData' null olarak çağrıldı.", this);
-            gameObject.SetActive(false); 
-            return;
-        }
+        if (this.npcData == null) { gameObject.SetActive(false); return; }
         
         this.homeTransform = home;
         this.workSpotTransform = workSpot;
@@ -92,42 +63,27 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
     private void InitializeVisuals()
     {
         if (npcData == null || spriteRenderer == null) return;
-        if (npcData.characterSprite != null) { spriteRenderer.sprite = npcData.characterSprite; }
-        if (npcData.scale != Vector3.one && npcData.scale != Vector3.zero) { transform.localScale = npcData.scale; }
-        else { transform.localScale = Vector3.one; }
+        if (npcData.characterSprite != null) spriteRenderer.sprite = npcData.characterSprite;
+        transform.localScale = (npcData.scale != Vector3.zero) ? npcData.scale : Vector3.one;
     }
     
     private void Update()
     {
-        if (currentState == State.Idle || currentTarget == null || npcData == null)
-        {
-            return;
-        }
+        if (currentState == State.Idle || currentTarget == null || npcData == null) return;
         
-        Vector3 targetPositionOnGround = new Vector3(
-            currentTarget.position.x, 
-            transform.position.y,
-            currentTarget.position.z
-        );
+        Vector3 targetPos = new Vector3(currentTarget.position.x, transform.position.y, currentTarget.position.z);
         
-        if (targetPositionOnGround.x > transform.position.x)
-            FlipSprite(false); 
-        else if (targetPositionOnGround.x < transform.position.x)
-            FlipSprite(true); 
+        if (targetPos.x > transform.position.x) FlipSprite(false); 
+        else if (targetPos.x < transform.position.x) FlipSprite(true); 
             
-        transform.position = Vector3.MoveTowards(
-            transform.position, 
-            targetPositionOnGround, 
-            Time.deltaTime * npcData.speed
-        );
+        transform.position = Vector3.MoveTowards(transform.position, targetPos, Time.deltaTime * npcData.speed);
 
-        if ((transform.position - targetPositionOnGround).sqrMagnitude < sqrArrivalDistanceThreshold)
+        if ((transform.position - targetPos).sqrMagnitude < sqrArrivalDistanceThreshold)
         {
             ArrivedAtTarget();
         }
     }
     
-    // --- (v2.0 - Sağlam Yol Mantığı) ---
     private void ArrivedAtTarget()
     {
         if (isMovingOnPath)
@@ -138,8 +94,17 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
         {
             State previousState = currentState;
             currentState = State.Idle; 
-            if (previousState == State.GoingToWork) { OnArrivedAtWork?.Invoke(this); }
-            else if (previousState == State.ReturningHome) { OnArrivedAtHome?.Invoke(this, currentPayloadAmount); }
+            
+            if (previousState == State.GoingToWork)
+            {
+                OnArrivedAtWork?.Invoke(this);
+            }
+            else if (previousState == State.ReturningHome)
+            {
+                // --- DEĞİŞİKLİK: Tipi de gönder ---
+                OnArrivedAtHome?.Invoke(this, currentPayloadAmount, currentPayloadType);
+                // ----------------------------------
+            }
         }
     }
 
@@ -153,12 +118,9 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
                 isMovingOnPath = false;
                 currentTarget = workSpotTransform;
             }
-            else
-            {
-                currentTarget = currentPath.waypoints[currentWaypointIndex];
-            }
+            else { currentTarget = currentPath.waypoints[currentWaypointIndex]; }
         }
-        else // (currentState == State.ReturningHome)
+        else // ReturningHome
         {
             currentWaypointIndex--; 
             if (currentWaypointIndex < 0)
@@ -166,58 +128,48 @@ public class FriendlyNpcAI : MonoBehaviour, IPooledNpc
                 isMovingOnPath = false;
                 currentTarget = homeTransform;
             }
-            else
-            {
-                currentTarget = currentPath.waypoints[currentWaypointIndex];
-            }
+            else { currentTarget = currentPath.waypoints[currentWaypointIndex]; }
         }
     }
 
-    // --- Komut Metotları (v2.0 - Yol Mantığı) ---
     public void GoToWork()
     {
-        currentPayloadAmount = 0; 
+        currentPayloadAmount = 0;
+        currentPayloadType = ResourceType.None; // Sıfırla
         currentState = State.GoingToWork;
-        if (currentPath != null && currentPath.waypoints.Length > 0)
-        {
-            isMovingOnPath = true;
-            currentWaypointIndex = 0; 
-            currentTarget = currentPath.waypoints[currentWaypointIndex];
-        }
-        else
-        {
-            isMovingOnPath = false;
-            currentTarget = workSpotTransform;
-        }
+        SetupPath(true);
     }
 
-    public void ReturnHome(int collectedAmount)
+    // --- DEĞİŞİKLİK: Tipi parametre olarak al ---
+    public void ReturnHome(int collectedAmount, ResourceType type)
     {
         currentPayloadAmount = collectedAmount;
+        currentPayloadType = type;
         currentState = State.ReturningHome;
+        SetupPath(false);
+    }
+    // --------------------------------------------
+
+    private void SetupPath(bool toWork)
+    {
         if (currentPath != null && currentPath.waypoints.Length > 0)
         {
             isMovingOnPath = true;
-            currentWaypointIndex = currentPath.waypoints.Length - 1; 
+            currentWaypointIndex = toWork ? 0 : currentPath.waypoints.Length - 1;
             currentTarget = currentPath.waypoints[currentWaypointIndex];
         }
         else
         {
             isMovingOnPath = false;
-            currentTarget = homeTransform;
+            currentTarget = toWork ? workSpotTransform : homeTransform;
         }
     }
     
-    public FriendlyNpcData GetNpcData()
-    {
-        return npcData;
-    }
+    public FriendlyNpcData GetNpcData() { return npcData; }
     
     private void FlipSprite(bool faceLeft)
     {
-        Vector3 baseScale = Vector3.one;
-        if (npcData != null) { baseScale = npcData.scale; }
-        if (faceLeft) { transform.localScale = new Vector3(-Mathf.Abs(baseScale.x), baseScale.y, baseScale.z); }
-        else { transform.localScale = new Vector3(Mathf.Abs(baseScale.x), baseScale.y, baseScale.z); }
+        Vector3 s = (npcData != null) ? npcData.scale : Vector3.one;
+        transform.localScale = new Vector3(faceLeft ? -Mathf.Abs(s.x) : Mathf.Abs(s.x), s.y, s.z);
     }
 }
