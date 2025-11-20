@@ -268,4 +268,16 @@ public class SiloController : MonoBehaviour
     {
         return (spawnPoint != null) ? spawnPoint : transform;
     }
+    /// <summary>
+/// Belirtilen kaynaktan stokta ne kadar olduğunu sadece okur (eksiltmez).
+/// Marketlerin "Smart Mode" kontrolü için gereklidir.
+/// </summary>
+public int GetStoredAmount(ResourceData resource)
+{
+    if (resource == null || !siloInventory.ContainsKey(resource))
+    {
+        return 0;
+    }
+    return siloInventory[resource];
+}
 }

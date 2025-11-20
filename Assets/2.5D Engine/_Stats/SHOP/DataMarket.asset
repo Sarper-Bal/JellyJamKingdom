@@ -16,8 +16,4 @@ MonoBehaviour:
   npcDataToSpawn: {fileID: 11400000, guid: 05afd4dba22d847a9bd8cab93a3dd174, type: 2}
   populationCount: 1
   spawnInterval: 1.5
-  resourceToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
-  maxStorageCapacity: 50
-  sellInterval: 0
-  sellAmount: 0
   restDuration: 0

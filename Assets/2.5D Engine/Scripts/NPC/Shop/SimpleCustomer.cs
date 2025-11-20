@@ -1,83 +1,55 @@
 using UnityEngine;
 using DG.Tweening;
 
-namespace IndianOceanAssets.Engine2_5D
+public class SimpleCustomer : MonoBehaviour
 {
-    public class SimpleCustomer : MonoBehaviour
+    [Header("Görsel Ayarlar")]
+    [SerializeField] private SpriteRenderer resourceIconRenderer;
+    [SerializeField] private float appearDuration = 0.5f;
+
+    public ResourceData RequestedResource { get; private set; }
+
+    public void OnSpawnFromPool()
     {
-        [Header("Görsel Ayarlar")]
-        [SerializeField] private SpriteRenderer resourceIconRenderer;
-        [SerializeField] private float appearDuration = 0.5f;
+        transform.localScale = Vector3.zero;
+        transform.DOKill();
+        if(resourceIconRenderer) resourceIconRenderer.transform.DOKill();
+    }
 
-        // Müşterinin verisi
-        public ResourceData RequestedResource { get; private set; }
-
-        /// <summary>
-        /// Havuzdan her çıktığında (Spawn) CustomerPooler tarafından çağrılır.
-        /// </summary>
-        public void OnSpawnFromPool()
+    public void Initialize(ResourceData resourceRequest)
+    {
+        RequestedResource = resourceRequest;
+        if (resourceIconRenderer != null && resourceRequest.icon != null)
         {
-            // 1. Ölçeği sıfırla (Animasyon için hazırlık)
-            transform.localScale = Vector3.zero;
-            
-            // 2. Olası eski animasyonları temizle (Güvenlik)
-            transform.DOKill();
-            if(resourceIconRenderer) resourceIconRenderer.transform.DOKill();
+            resourceIconRenderer.sprite = resourceRequest.icon;
+            resourceIconRenderer.gameObject.SetActive(true);
+            resourceIconRenderer.transform.localScale = Vector3.zero;
+            resourceIconRenderer.transform.DOScale(1f, 0.3f).SetDelay(appearDuration);
         }
+        transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutBack);
+    }
 
-        public void Initialize(ResourceData resourceRequest)
+    public void MoveToSpot(Vector3 targetPosition)
+    {
+        transform.DOJump(targetPosition, 0.5f, 1, 0.5f).SetEase(Ease.OutQuad);
+    }
+
+    public void LeaveHappy()
+    {
+        if(resourceIconRenderer) resourceIconRenderer.gameObject.SetActive(false);
+        transform.DOJump(transform.position, 1f, 1, 0.5f).OnComplete(() =>
         {
-            RequestedResource = resourceRequest;
-
-            // İkon Görünümü
-            if (resourceIconRenderer != null && resourceRequest.icon != null)
+            transform.DOScale(Vector3.zero, 0.2f).OnComplete(() =>
             {
-                resourceIconRenderer.sprite = resourceRequest.icon;
-                resourceIconRenderer.gameObject.SetActive(true);
-                
-                // İkon animasyonu
-                resourceIconRenderer.transform.localScale = Vector3.zero;
-                resourceIconRenderer.transform.DOScale(1f, 0.3f).SetDelay(appearDuration);
-            }
-
-            // Karakter Belirme Animasyonu (Elastic Pop-up)
-            transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutBack);
-        }
-
-        public void MoveToSpot(Vector3 targetPosition)
-        {
-            // Zıplayarak ilerle
-            transform.DOJump(targetPosition, 0.5f, 1, 0.5f).SetEase(Ease.OutQuad);
-        }
-
-        public void LeaveHappy()
-        {
-            if(resourceIconRenderer) resourceIconRenderer.gameObject.SetActive(false);
-
-            // Mutlu ayrılma efekti
-            transform.DOJump(transform.position, 1f, 1, 0.5f).OnComplete(() =>
-            {
-                transform.DOScale(Vector3.zero, 0.2f).OnComplete(() =>
-                {
-                    // DEĞİŞİKLİK: Özel CustomerPooler'a dön
-                    ReturnSelfToPool();
-                });
+                ReturnSelfToPool();
             });
-        }
+        });
+    }
 
-        private void ReturnSelfToPool()
-        {
-            transform.DOKill();
-            
-            // Singleton kontrolü (Sahne kapatılırken hata vermemesi için)
-            if (CustomerPooler.Instance != null)
-            {
-                CustomerPooler.Instance.ReturnCustomer(this);
-            }
-            else
-            {
-                Destroy(gameObject); // Pooler yoksa yok et
-            }
-        }
+    private void ReturnSelfToPool()
+    {
+        transform.DOKill();
+        if (CustomerPooler.Instance != null) CustomerPooler.Instance.ReturnCustomer(this);
+        else Destroy(gameObject);
     }
 }
