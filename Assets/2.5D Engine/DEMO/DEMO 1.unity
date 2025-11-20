@@ -813,6 +813,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 224663420570997075, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3159502058116077875, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: baseStatsData
       value: 
@@ -1944,7 +1948,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: beb5f0bbc354f5d449eea8768c752e72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CurrentMode: 2
+  CurrentMode: 0
   target: {fileID: 441783843}
   offset: {x: 0, y: 6.72, z: -10}
   followSpeed: 8
@@ -9118,7 +9122,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   pools:
   - tag: projectile
-    prefab: {fileID: 2829856321817114063, guid: 605d50a8f379448a5a4ca289f6e64719, type: 3}
+    prefab: {fileID: 2829856321817114063, guid: 51777ba2ecd6fed45a171d318a10cc3e, type: 3}
     size: 20
     isDynamicallyManaged: 0
   - tag: explosion

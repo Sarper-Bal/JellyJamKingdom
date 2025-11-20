@@ -18,8 +18,8 @@ MonoBehaviour:
   rollCooldown: 1
   maxHealth: 30
   projectileDamage: 10
-  projectileSpeed: 10
-  projectileRadius: 4
+  projectileSpeed: 20
+  projectileRadius: 10
   attackSpeed: 0.5
   attackRange: 7
   canFireWhileMoving: 0
