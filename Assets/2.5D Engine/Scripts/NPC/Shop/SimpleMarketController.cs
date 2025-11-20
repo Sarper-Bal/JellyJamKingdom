@@ -1,80 +1,87 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq; // List aramaları için gerekli
 
 public class SimpleMarketController : MonoBehaviour
 {
+    // --- YENİ EKONOMİ SİSTEMİ BAŞLANGICI ---
+    [System.Serializable]
+    public struct TradeItem
+    {
+        public ResourceData itemToSell; // Örn: Stone
+        public int pricePerUnit;        // Örn: 2 (Coin)
+    }
+
+    [Header("--- EKONOMİ (Economy) ---")]
+    [Tooltip("Bu market satış karşılığında ne kazanacak? (Örn: Coin)")]
+    [SerializeField] private ResourceData currencyResource;
+
+    [Tooltip("Hangi ürün kaç para ediyor?")]
+    [SerializeField] private List<TradeItem> priceList;
+
+    [Header("--- KASA (Wallet) ---")]
+    [Tooltip("Marketin şu ana kadar kazandığı toplam para.")]
+    [SerializeField] private int accumulatedCurrency = 0;
+    // --- YENİ EKONOMİ SİSTEMİ SONU ---
+
     [Header("--- MODLAR (Modes) ---")]
-    [Tooltip("İşaretliyse: İşçi görevden dönünce yok olmaz, kapıda bekler (Nöbetçi Modu).")]
+    [Tooltip("İşaretliyse: İşçi görevden dönünce yok olmaz, kapıda bekler.")]
     [SerializeField] private bool keepWorkerActive = true;
 
     [Tooltip("İşaretliyse: İşçi SADECE Silo'da kaynak varsa hareket eder.")]
     [SerializeField] private bool smartWaitMode = true; 
 
-    [Header("--- AYARLAR (Settings) ---")]
+    [Header("--- AYARLAR ---")]
     [SerializeField] private Transform[] queueSpots;
-    [SerializeField] private List<ResourceData> possibleRequests;
+    // possibleRequests'i artık priceList'ten otomatik çekebiliriz ama manuel kontrol için kalsın.
+    [SerializeField] private List<ResourceData> possibleRequests; 
     [SerializeField] private float customerSpawnInterval = 2.5f;
     
-    [Header("--- KONUMLANDIRMA VE HAREKET (Position & Path) ---")]
-    [Tooltip("İşçinin bekleyeceği ve doğacağı nokta.")]
+    [Header("--- KONUMLANDIRMA & HAREKET ---")]
     [SerializeField] private Transform workerSpawnPoint;
+    [SerializeField] private NpcPath workerPath;
 
-    [Tooltip("YENİ: İşçinin Silo'ya giderken takip edeceği yol. (Boş bırakılırsa direkt koşar)")]
-    [SerializeField] private NpcPath workerPath; // <-- YENİ EKLENEN ALAN
-
-    [Header("--- HAVUZ & PREFABLAR (Pool & Prefabs) ---")]
+    [Header("--- HAVUZ & PREFABLAR ---")]
     [SerializeField] private SimpleCustomer customerPrefab; 
-    
-    [Header("--- ÖNEMLİ: İŞÇİ PREFABI ---")]
-    [Tooltip("BURAYI BOŞ BIRAKMA! NpcPooler'a tanıtılacak İşçi Prefabı.")]
+    [Tooltip("NpcPooler'a tanıtılacak İşçi Prefabı.")]
     [SerializeField] private FriendlyNpcAI workerPrefab; 
     
-    [Header("--- BAĞIMLILIKLAR (Dependencies) ---")]
+    [Header("--- BAĞIMLILIKLAR ---")]
     [SerializeField] private SiloController targetSilo;
     
-    [Header("--- İŞÇİ DETAYLARI (Worker Stats) ---")]
+    [Header("--- İŞÇİ DETAYLARI ---")]
     [SerializeField] private FriendlyNpcData workerData; 
     [SerializeField] private string workerPoolTag = "NPC";
 
-    // --- Runtime Değişkenleri ---
     private SimpleCustomer[] currentCustomers;
     private bool isWorkerBusy = false;
     private FriendlyNpcAI permanentWorker; 
 
-    // Başlangıç (IEnumerator: Pooler'ın hazır olmasını beklemek için)
     private IEnumerator Start()
     {
-        // 1. Önce sistemlerin (Pooler) hazır olmasını bekle
         yield return new WaitUntil(() => NpcPooler.Instance != null);
         
-        // 2. Güvenlik Kontrolleri
-        if (workerPrefab == null)
+        if (workerPrefab == null || queueSpots == null || queueSpots.Length == 0)
         {
-            Debug.LogError($"HATA: '{gameObject.name}' üzerindeki SimpleMarketController'da 'Worker Prefab' atanmamış!");
+            Debug.LogError("HATA: SimpleMarketController eksik referans!");
             yield break;
         }
-        
-        if (queueSpots == null || queueSpots.Length == 0)
+
+        // Fiyat listesi kontrolü
+        if (currencyResource == null)
         {
-             Debug.LogError("HATA: SimpleMarket kuyruk noktaları (Queue Spots) atanmamış!");
-             yield break;
+            Debug.LogWarning("UYARI: Marketin 'Currency Resource' (Para Birimi) atanmamış! Kazanç sağlanamayacak.");
         }
 
-        // 3. Müşteri Havuzunu Ayarla
+        // Havuz İşlemleri
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         if (CustomerPooler.Instance != null && customerPrefab != null)
         {
             CustomerPooler.Instance.RegisterPool(customerPrefab, queueSpots.Length + 2);
         }
-
-        // 4. İşçi Havuzu Rezervasyonu
-        // Market başına 1 işçi lazım. Havuza bunu ekletiyoruz.
         NpcPooler.Instance.CreatePool(workerPoolTag, workerPrefab.gameObject, 1);
         
-        Debug.Log($"SimpleMarket: '{name}' başladı. Yol atanmış mı? {(workerPath != null ? "EVET" : "HAYIR")}");
-
-        // 5. Döngüleri Başlat
         StartCoroutine(SpawnRoutine());
         StartCoroutine(LogicRoutine());
     }
@@ -141,7 +148,6 @@ public class SimpleMarketController : MonoBehaviour
         ResourceData requestedRes = currentCustomers[0].RequestedResource;
         if (smartWaitMode)
         {
-            // Silo'da mal yoksa işçi gönderme
             if (targetSilo.GetStoredAmount(requestedRes) < 1) return; 
         }
 
@@ -152,47 +158,33 @@ public class SimpleMarketController : MonoBehaviour
     {
         isWorkerBusy = true;
 
-        // Nöbetçi İşçi (Permanent Worker) Yönetimi
         if (permanentWorker == null)
         {
             Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
             Quaternion spawnRot = (workerSpawnPoint != null) ? workerSpawnPoint.rotation : Quaternion.identity;
 
-            // Havuzdan çek
             permanentWorker = NpcPooler.Instance.SpawnFromPool(workerPoolTag, spawnPos, spawnRot);
             
-            // Eğer havuz boşsa (acil durum), yeni yaratıp çek
             if (permanentWorker == null)
             {
-                Debug.LogWarning("SimpleMarket: Havuz boş! Acil durum üretimi yapılıyor.");
+                // Acil durum
                 NpcPooler.Instance.CreatePool(workerPoolTag, workerPrefab.gameObject, 1);
                 permanentWorker = NpcPooler.Instance.SpawnFromPool(workerPoolTag, spawnPos, spawnRot);
-                
-                if (permanentWorker == null)
-                {
-                     isWorkerBusy = false;
-                     yield break;
-                }
+                if (permanentWorker == null) { isWorkerBusy = false; yield break; }
             }
         }
         else
         {
-            // Zaten varsa ve kapalıysa aç
             if (!permanentWorker.gameObject.activeInHierarchy) permanentWorker.gameObject.SetActive(true);
         }
 
-        // Olayları dinle (Eski abonelikleri temizleyerek)
         permanentWorker.OnArrivedAtWork -= OnWorkerArrivedAtSilo;
         permanentWorker.OnArrivedAtHome -= OnWorkerReturnedToShop;
         permanentWorker.OnArrivedAtWork += OnWorkerArrivedAtSilo;
         permanentWorker.OnArrivedAtHome += OnWorkerReturnedToShop;
 
         Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform;
-        
-        // --- DEĞİŞİKLİK: Yolu (workerPath) parametre olarak gönderiyoruz ---
-        // Eğer workerPath null ise NPC direkt koşar, atanmışsa yolu takip eder.
         permanentWorker.Activate(workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
-        
         yield return null;
     }
 
@@ -202,8 +194,6 @@ public class SimpleMarketController : MonoBehaviour
 
         ResourceData requested = currentCustomers[0].RequestedResource;
         int taken = targetSilo.TakeResource(requested, 1);
-        
-        // Eve dön (Dönerken genellikle aynı yolu tersten kullanır veya direkt döner, NPC AI mantığına bağlı)
         npc.ReturnHome(taken, requested);
     }
 
@@ -219,10 +209,39 @@ public class SimpleMarketController : MonoBehaviour
             permanentWorker = null; 
         }
 
+        // Satış Başarılı mı?
         if (amount > 0 && currentCustomers[0] != null)
         {
+            // --- YENİ: PARA HESAPLAMA ---
+            CalculateEarnings(resource, amount);
+            // ----------------------------
+
             currentCustomers[0].LeaveHappy();
             currentCustomers[0] = null; 
+        }
+    }
+
+    // --- YENİ: KAZANÇ HESAPLAMA METODU ---
+    private void CalculateEarnings(ResourceData soldItem, int quantity)
+    {
+        if (currencyResource == null) return;
+
+        // Listeden fiyatı bul (Linq kullanarak)
+        // Eğer listede yoksa varsayılan olarak 0 döner.
+        var priceEntry = priceList.FirstOrDefault(x => x.itemToSell == soldItem);
+        
+        if (priceEntry.itemToSell != null) // Listede bulduysak
+        {
+            int totalEarned = priceEntry.pricePerUnit * quantity;
+            accumulatedCurrency += totalEarned;
+            
+            Debug.Log($"KAZANÇ: {quantity} adet {soldItem.resourceName} satıldı. " +
+                      $"Kazanılan: {totalEarned} {currencyResource.resourceName}. " +
+                      $"Kasadaki Toplam: {accumulatedCurrency}");
+        }
+        else
+        {
+            Debug.LogWarning($"Market: '{soldItem.resourceName}' satıldı ama Fiyat Listesinde (Price List) tanımı yok! Para kazanılmadı.");
         }
     }
 }

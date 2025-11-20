@@ -1100,6 +1100,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2678e4eba3f94a0e8f6673d28c143f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.SimpleMarketController
+  currencyResource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
+  priceList:
+  - itemToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
+    pricePerUnit: 2
+  - itemToSell: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
+    pricePerUnit: 1
+  accumulatedCurrency: 0
   keepWorkerActive: 1
   smartWaitMode: 1
   queueSpots:
