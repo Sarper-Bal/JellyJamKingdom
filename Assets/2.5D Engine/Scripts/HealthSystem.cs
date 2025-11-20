@@ -1,27 +1,3 @@
-/*
- * SAĞLIK SİSTEMİ (HEALTH SYSTEM) - v2.2 (Hibrit Refactor)
- *
- * DEĞİŞİKLİKLER:
- * - 'deathEffect' (GameObject) alanı Inspector'a geri eklendi.
- * - YENİ TOOLTIP: Bu alanın artık SADECE 'isPlayer' true ise
- * kullanıldığı belirtildi.
- * - 'Die()' metodu GÜNCELLENDİ:
- * - EĞER 'isPlayer' FALSE (Düşman) ise:
- * - Efekti 'enemyAIComponent.GetDeathEffectFromData()' (yani EnemyData)
- * üzerinden alır.
- * - Efekti 'ObjectPooler.SpawnFromPool' ile havuzdan çağırır.
- * - Kendini 'ObjectPooler.ReturnToPool' ile havuza döndürür.
- * (Bu, 'otomatik Pool sistemimizin' düzgün çalışmasını sağlar)
- *
- * - EĞER 'isPlayer' TRUE (Oyuncu) ise:
- * - Efekti Inspector'daki 'deathEffect' alanından alır.
- * - Efekti 'Instantiate' ile yaratır (Oyuncu havuzlanmadığı için).
- * - Kendini 'Destroy(gameObject)' ile yok eder.
- *
- * BU YAPI, Player prefab'ını bozmadan, Enemy sistemini data-driven
- * tutmamızı sağlar.
- */
-
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -37,12 +13,9 @@ namespace IndianOceanAssets.Engine2_5D
         [SerializeField]
         private bool isPlayer;
         
-        // --- DEĞİŞİKLİK BAŞLANGICI (Hibrit Alan) ---
-        [Tooltip("EĞER 'isPlayer' TRUE (Oyuncu) ise, öldüğünde spawn olacak efekt. " +
-                 "(Düşmanlar bu alanı KULLANMAZ, efekti EnemyData'dan alır)")]
+        [Tooltip("EĞER 'isPlayer' TRUE (Oyuncu) ise, öldüğünde spawn olacak efekt.")]
         [SerializeField]
-        private GameObject deathEffect; // <-- GERİ EKLENDİ (Sadece Oyuncu için)
-        // --- DEĞİŞİKLİK SONU ---
+        private GameObject deathEffect; 
 
         private int health; 
         private int currentMaxHealth; 
@@ -51,7 +24,7 @@ namespace IndianOceanAssets.Engine2_5D
 
         public void OnObjectSpawn()
         {
-            // Oyuncuysak canı doldur; düşmansak EnemyAI'dan komut bekle
+            // Havuzdan çıkarken (Düşmanlar için)
             if (isPlayer)
             {
                 InitializeHealth();
@@ -67,7 +40,10 @@ namespace IndianOceanAssets.Engine2_5D
                 {
                     Debug.LogError("HealthSystem 'isPlayer' olarak işaretli ancak PlayerStats component'i bulunamadı!");
                 }
-                InitializeHealth(); 
+                
+                // --- DEĞİŞİKLİK: InitializeHealth BURADAN KALDIRILDI ---
+                // Burası çok erkendi, HealthUI daha hazır olmamış olabilir.
+                
                 playerStatsComponent.OnStatsChanged += HandlePlayerStatsChanged;
             }
             else
@@ -81,6 +57,18 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
+        // --- DEĞİŞİKLİK: Start Metodu Eklendi ---
+        private void Start()
+        {
+            // Oyuncu can barı başlatmasını burada yapıyoruz.
+            // Çünkü Start çalıştığında tüm objelerin 'Awake'i bitmiştir ve HealthUI.Instance hazırdır.
+            if (isPlayer)
+            {
+                InitializeHealth();
+            }
+        }
+        // ----------------------------------------
+
         private void OnDestroy()
         {
             if (isPlayer && playerStatsComponent != null)
@@ -91,11 +79,10 @@ namespace IndianOceanAssets.Engine2_5D
 
         private void HandlePlayerStatsChanged()
         {
-            // ... (Değişiklik yok)
             int oldMaxHealth = currentMaxHealth;
             currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
             if (health > currentMaxHealth) { health = currentMaxHealth; }
-            if (isPlayer)
+            if (isPlayer && HealthUI.Instance != null) // Ekstra güvenlik
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
         }
 
@@ -105,9 +92,12 @@ namespace IndianOceanAssets.Engine2_5D
         private void InitializeHealth()
         {
             if (!isPlayer || playerStatsComponent == null) return;
+            
             currentMaxHealth = playerStatsComponent.CurrentMaxHealth;
             health = currentMaxHealth;
-            if (isPlayer)
+            
+            // HealthUI'ın hazır olduğundan emin olduğumuz yer (Start)
+            if (isPlayer && HealthUI.Instance != null)
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
         }
         
@@ -124,61 +114,44 @@ namespace IndianOceanAssets.Engine2_5D
         public void Damage(int damageAmount)
         {
             health -= damageAmount;
-            if (isPlayer)
+            if (isPlayer && HealthUI.Instance != null)
                 HealthUI.Instance.UpdateHealthBar(currentMaxHealth, health);
 
             if (health <= 0)
             {
-                if (isPlayer)
+                if (isPlayer && HealthUI.Instance != null)
                     HealthUI.Instance.ReloadScene();
                 Die();
             }
         }
 
-        // --- DEĞİŞİKLİK BAŞLANGICI (Hibrit Die Metodu) ---
-        /// <summary>
-        /// Ölüm mantığını ve efektlerini yönetir.
-        /// 'isPlayer' durumuna göre farklı çalışır.
-        /// </summary>
         public void Die()
         {
             if (!isPlayer)
             {
                 // --- DÜŞMAN İÇİN DATA-DRIVEN YOL ---
-                
-                // 1. 'EnemyAI' component'i geçerli mi?
                 if (enemyAIComponent != null)
                 {
-                    // 2. 'EnemyData'dan ölüm efektini iste
                     GameObject effectPrefab = enemyAIComponent.GetDeathEffectFromData();
                     if (effectPrefab != null)
                     {
-                        // 3. Efekti prefab adını 'tag' olarak kullanarak HAVUZDAN ÇAĞIR
                         ObjectPooler.Instance.SpawnFromPool(
                             effectPrefab.name, 
                             transform.position + new Vector3(0f, .5f, 0f), 
                             Quaternion.identity);
                     }
                 }
-
-                // 4. Kendini HAVUZA GERİ GÖNDER
                 ObjectPooler.Instance.ReturnToPool(PoolTag, gameObject);
             }
             else 
             {
-                // --- OYUNCU İÇİN ESKİ (PREFAB) YOL ---
-                
-                // 1. Inspector'daki 'deathEffect' alanını kontrol et
+                // --- OYUNCU İÇİN ---
                 if (deathEffect != null)
                 {
-                    // 2. Efekti 'Instantiate' ile YARAT (Havuzlama yok)
                     Instantiate(deathEffect, transform.position + new Vector3(0f, .5f, 0f), Quaternion.identity);
                 }
-                
-                // 3. Oyuncu objesini YOK ET
                 Destroy(gameObject);
             }
         }
-        // --- DEĞİŞİKLİK SONU ---
     }
 }
