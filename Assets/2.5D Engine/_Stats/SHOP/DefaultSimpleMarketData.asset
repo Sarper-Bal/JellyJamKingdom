@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fc86d9819e65407e81a0ec0fe8500b0, type: 3}
+  m_Name: DefaultSimpleMarketData
+  m_EditorClassIdentifier: Assembly-CSharp::SimpleMarketData
+  customerSpawnInterval: 2
+  currencyResource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
+  priceList:
+  - itemToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
+    pricePerUnit: 2
+  - itemToSell: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
+    pricePerUnit: 1
+  customerPrefab: {fileID: -8451793211474312844, guid: decb02d5758994cdd83752712aa6ac38, type: 3}
+  workerPrefab: {fileID: 584057605807608999, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
+  workerData: {fileID: 11400000, guid: 46840630fa28f40c9a19b9588e996f08, type: 2}
+  workerPoolTag: NPC
