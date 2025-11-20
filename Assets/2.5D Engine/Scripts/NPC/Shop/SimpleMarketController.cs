@@ -4,72 +4,75 @@ using UnityEngine;
 
 public class SimpleMarketController : MonoBehaviour
 {
-    [Header("--- MODLAR ---")]
+    [Header("--- MODLAR (Modes) ---")]
     [Tooltip("İşaretliyse: İşçi görevden dönünce yok olmaz, kapıda bekler (Nöbetçi Modu).")]
     [SerializeField] private bool keepWorkerActive = true;
 
     [Tooltip("İşaretliyse: İşçi SADECE Silo'da kaynak varsa hareket eder.")]
     [SerializeField] private bool smartWaitMode = true; 
 
-    [Header("--- AYARLAR ---")]
+    [Header("--- AYARLAR (Settings) ---")]
     [SerializeField] private Transform[] queueSpots;
     [SerializeField] private List<ResourceData> possibleRequests;
     [SerializeField] private float customerSpawnInterval = 2.5f;
     
-    [Header("--- KONUMLANDIRMA ---")]
+    [Header("--- KONUMLANDIRMA VE HAREKET (Position & Path) ---")]
     [Tooltip("İşçinin bekleyeceği ve doğacağı nokta.")]
     [SerializeField] private Transform workerSpawnPoint;
 
-    [Header("--- HAVUZ & PREFABLAR ---")]
+    [Tooltip("YENİ: İşçinin Silo'ya giderken takip edeceği yol. (Boş bırakılırsa direkt koşar)")]
+    [SerializeField] private NpcPath workerPath; // <-- YENİ EKLENEN ALAN
+
+    [Header("--- HAVUZ & PREFABLAR (Pool & Prefabs) ---")]
     [SerializeField] private SimpleCustomer customerPrefab; 
     
     [Header("--- ÖNEMLİ: İŞÇİ PREFABI ---")]
-    [Tooltip("BURAYI BOŞ BIRAKMA! NpcPooler'a tanıtılacak İşçi Prefabı (Genellikle 'NPC' veya 'Worker' prefabı).")]
+    [Tooltip("BURAYI BOŞ BIRAKMA! NpcPooler'a tanıtılacak İşçi Prefabı.")]
     [SerializeField] private FriendlyNpcAI workerPrefab; 
     
-    [Header("--- BAĞIMLILIKLAR ---")]
+    [Header("--- BAĞIMLILIKLAR (Dependencies) ---")]
     [SerializeField] private SiloController targetSilo;
     
-    [Header("--- İŞÇİ DETAYLARI ---")]
+    [Header("--- İŞÇİ DETAYLARI (Worker Stats) ---")]
     [SerializeField] private FriendlyNpcData workerData; 
     [SerializeField] private string workerPoolTag = "NPC";
 
+    // --- Runtime Değişkenleri ---
     private SimpleCustomer[] currentCustomers;
     private bool isWorkerBusy = false;
     private FriendlyNpcAI permanentWorker; 
 
-    // --- DEĞİŞİKLİK: Start artık IEnumerator (Bekleme yapabilmesi için) ---
+    // Başlangıç (IEnumerator: Pooler'ın hazır olmasını beklemek için)
     private IEnumerator Start()
     {
-        // 1. Önce NpcPooler'ın ve CustomerPooler'ın hazır olmasını bekle (Race Condition Çözümü)
+        // 1. Önce sistemlerin (Pooler) hazır olmasını bekle
         yield return new WaitUntil(() => NpcPooler.Instance != null);
         
-        // 2. Güvenlik Kontrolleri ve Hata Raporlama
+        // 2. Güvenlik Kontrolleri
         if (workerPrefab == null)
         {
-            Debug.LogError($"HATA: '{gameObject.name}' üzerindeki SimpleMarketController'da 'Worker Prefab' atanmamış! Lütfen Inspector'dan bir NPC prefabı sürükleyin.");
-            yield break; // Kodu durdur
+            Debug.LogError($"HATA: '{gameObject.name}' üzerindeki SimpleMarketController'da 'Worker Prefab' atanmamış!");
+            yield break;
         }
         
         if (queueSpots == null || queueSpots.Length == 0)
         {
-             Debug.LogError("SimpleMarket: Queue Spots atanmamış!");
+             Debug.LogError("HATA: SimpleMarket kuyruk noktaları (Queue Spots) atanmamış!");
              yield break;
         }
 
-        // 3. Müşteri Havuzu Rezervasyonu
+        // 3. Müşteri Havuzunu Ayarla
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         if (CustomerPooler.Instance != null && customerPrefab != null)
         {
             CustomerPooler.Instance.RegisterPool(customerPrefab, queueSpots.Length + 2);
         }
 
-        // 4. İŞÇİ HAVUZU REZERVASYONU (GARANTİ EKLENDİ)
-        // Market başına 1 işçi lazım. "NPC" havuzuna 1 tane ekle.
-        // Eğer havuzda zaten 10 tane varsa, 11. yi ekler. Böylece "yetersiz havuz" sorunu çözülür.
+        // 4. İşçi Havuzu Rezervasyonu
+        // Market başına 1 işçi lazım. Havuza bunu ekletiyoruz.
         NpcPooler.Instance.CreatePool(workerPoolTag, workerPrefab.gameObject, 1);
         
-        Debug.Log($"SimpleMarket: '{workerPoolTag}' havuzu başarıyla ayarlandı/genişletildi.");
+        Debug.Log($"SimpleMarket: '{name}' başladı. Yol atanmış mı? {(workerPath != null ? "EVET" : "HAYIR")}");
 
         // 5. Döngüleri Başlat
         StartCoroutine(SpawnRoutine());
@@ -138,6 +141,7 @@ public class SimpleMarketController : MonoBehaviour
         ResourceData requestedRes = currentCustomers[0].RequestedResource;
         if (smartWaitMode)
         {
+            // Silo'da mal yoksa işçi gönderme
             if (targetSilo.GetStoredAmount(requestedRes) < 1) return; 
         }
 
@@ -148,19 +152,19 @@ public class SimpleMarketController : MonoBehaviour
     {
         isWorkerBusy = true;
 
+        // Nöbetçi İşçi (Permanent Worker) Yönetimi
         if (permanentWorker == null)
         {
             Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
             Quaternion spawnRot = (workerSpawnPoint != null) ? workerSpawnPoint.rotation : Quaternion.identity;
 
-            // Burada havuzdan çekmeye çalışıyoruz
+            // Havuzdan çek
             permanentWorker = NpcPooler.Instance.SpawnFromPool(workerPoolTag, spawnPos, spawnRot);
             
+            // Eğer havuz boşsa (acil durum), yeni yaratıp çek
             if (permanentWorker == null)
             {
-                // EĞER HALA NULL GELİYORSA: Havuz Start'ta oluşturulmasına rağmen boş demektir.
-                // Acil durum: Anında yeni bir tane yarat.
-                Debug.LogWarning("SimpleMarket: Havuz boş kaldı! Acil durum üretimi yapılıyor.");
+                Debug.LogWarning("SimpleMarket: Havuz boş! Acil durum üretimi yapılıyor.");
                 NpcPooler.Instance.CreatePool(workerPoolTag, workerPrefab.gameObject, 1);
                 permanentWorker = NpcPooler.Instance.SpawnFromPool(workerPoolTag, spawnPos, spawnRot);
                 
@@ -173,16 +177,22 @@ public class SimpleMarketController : MonoBehaviour
         }
         else
         {
+            // Zaten varsa ve kapalıysa aç
             if (!permanentWorker.gameObject.activeInHierarchy) permanentWorker.gameObject.SetActive(true);
         }
 
+        // Olayları dinle (Eski abonelikleri temizleyerek)
         permanentWorker.OnArrivedAtWork -= OnWorkerArrivedAtSilo;
         permanentWorker.OnArrivedAtHome -= OnWorkerReturnedToShop;
         permanentWorker.OnArrivedAtWork += OnWorkerArrivedAtSilo;
         permanentWorker.OnArrivedAtHome += OnWorkerReturnedToShop;
 
         Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform;
-        permanentWorker.Activate(workerData, homePoint, targetSilo.GetSpawnPoint(), null);
+        
+        // --- DEĞİŞİKLİK: Yolu (workerPath) parametre olarak gönderiyoruz ---
+        // Eğer workerPath null ise NPC direkt koşar, atanmışsa yolu takip eder.
+        permanentWorker.Activate(workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
+        
         yield return null;
     }
 
@@ -192,6 +202,8 @@ public class SimpleMarketController : MonoBehaviour
 
         ResourceData requested = currentCustomers[0].RequestedResource;
         int taken = targetSilo.TakeResource(requested, 1);
+        
+        // Eve dön (Dönerken genellikle aynı yolu tersten kullanır veya direkt döner, NPC AI mantığına bağlı)
         npc.ReturnHome(taken, requested);
     }
 
