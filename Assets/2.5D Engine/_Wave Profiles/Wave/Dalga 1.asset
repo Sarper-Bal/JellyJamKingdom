@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 772cc516b38fa4ec48fa83231ba24b3e, type: 3}
   m_Name: Dalga 1
   m_EditorClassIdentifier: 
-  roundDuration: 3
+  roundDuration: 40
   victoryDelay: 1
   spawnEvents:
   - enemyDataToSpawn: {fileID: 11400000, guid: 390874436c26c4f90b4ef9db33df839c, type: 2}

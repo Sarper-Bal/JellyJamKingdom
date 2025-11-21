@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.WaveSequence
   waves:
   - {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
-  - {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
+  - {fileID: 11400000, guid: 703effd4af52e4d4ab4ff09a66d9dc4a, type: 2}
   loopSequence: 1
-  delayBetweenWaves: 5
+  delayBetweenWaves: 3

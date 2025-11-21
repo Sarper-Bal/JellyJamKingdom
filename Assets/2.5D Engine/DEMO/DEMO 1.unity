@@ -11579,7 +11579,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ad32b52397da46468fd1323848cca16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  timerBar: {fileID: 0}
+  timerBarImage: {fileID: 0}
+  timerText: {fileID: 407776899}
 --- !u!4 &1979538492
 Transform:
   m_ObjectHideFlags: 0

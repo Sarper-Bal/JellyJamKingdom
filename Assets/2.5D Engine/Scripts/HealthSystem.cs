@@ -127,8 +127,15 @@ namespace IndianOceanAssets.Engine2_5D
 
         public void Die()
         {
-            if (!isPlayer)
+           if (!isPlayer)
             {
+                // --- YENİ: WAVE MANAGER'A HABER VER ---
+                if (WaveManager.Instance != null)
+                {
+                    WaveManager.Instance.OnEnemyKilled();
+                }
+                // --------------------------------------
+
                 // --- DÜŞMAN İÇİN DATA-DRIVEN YOL ---
                 if (enemyAIComponent != null)
                 {
