@@ -33,7 +33,7 @@ MonoBehaviour:
     repeatInterval: 1
     hasFiniteDuration: 1
     endTime: 30
-    count: 1
+    count: 0
     spawnInterval: 1
   - enemyDataToSpawn: {fileID: 11400000, guid: 86c558070ad87409aa1eb2e7c9ad043f, type: 2}
     spawnPointID: 2
@@ -43,5 +43,5 @@ MonoBehaviour:
     repeatInterval: 2
     hasFiniteDuration: 0
     endTime: 0
-    count: 1
+    count: 0
     spawnInterval: 1
