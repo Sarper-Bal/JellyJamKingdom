@@ -12,25 +12,24 @@ namespace IndianOceanAssets.Engine2_5D
         public static WaveManager Instance { get; private set; }
         #endregion
 
-        // --- TEMİZLİK: 'autoStart' SİLİNDİ --- 
-        // Artık sadece emir bekleyen bir sistem.
-
         [Header("Havuz")]
         [SerializeField] private GameObject genericEnemyPrefab;
         
         [Header("Referanslar")]
         [SerializeField] private RoundManager roundManager;
         
-        // --- TEMİZLİK: 'currentRoundProfile' GİZLENDİ ---
-        // Inspector'dan atama yapmıyoruz, runtime (çalışma anı) verisidir.
         private WaveProfile currentRoundProfile; 
         
-        // Muhasebe Değişkenleri
+        // Muhasebe
         private int totalEnemiesToSpawn = 0; 
         private int spawnedEnemiesCount = 0; 
         private int activeEnemyCount = 0;    
         
-        // Runtime Veriler
+        // --- OPTİMİZASYON: AKTİF DÜŞMAN LİSTESİ ---
+        // Sahneyi taramak yerine, canlı olanları burada tutacağız.
+        private List<GameObject> activeEnemiesList = new List<GameObject>();
+        // ------------------------------------------
+
         private int totalEnemyPoolSize = 0;
         private Dictionary<GameObject, int> dynamicEffectPools;
         private Dictionary<int, EnemySpawnPoint> spawnPoints = new Dictionary<int, EnemySpawnPoint>();
@@ -44,43 +43,43 @@ namespace IndianOceanAssets.Engine2_5D
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             
-            // Sahne taramaları
             spawnPoints = FindObjectsOfType<EnemySpawnPoint>().ToDictionary(sp => sp.spawnPointID);
             enemyPaths = FindObjectsOfType<EnemyPath>().ToDictionary(path => path.pathID);
         }
 
         private void Start()
         {
-            // Referans Kontrolleri
             if (roundManager == null) Debug.LogError("WaveManager: RoundManager eksik!");
             if (genericEnemyPrefab == null) Debug.LogError("WaveManager: Generic Enemy Prefab eksik!");
             
             GameObject playerGO = GameObject.FindGameObjectWithTag("Player");
             if (playerGO != null) playerTarget = playerGO.transform;
-
-            // --- TEMİZLİK: OTO-BAŞLATMA KODU SİLİNDİ ---
-            // WaveManager artık Start'ta hiçbir şey yapmaz.
-            // WaveSequenceController'ın 'LoadAndStartWave' çağırmasını bekler.
         }
 
-        // --- DIŞARIDAN EMİR ALMA (Giriş Kapısı) ---
         public void LoadAndStartWave(WaveProfile profile)
         {
             if (profile == null) return;
-
-            // Temizlik yap ve yeni profile geç
             CleanupDynamicPools();
-            currentRoundProfile = profile; // Veriyi içeri al
+            currentRoundProfile = profile; 
             StartWaveRoutine(profile);
         }
 
-        public void OnEnemyKilled()
+        // --- GÜNCELLENMİŞ ÖLÜM BİLDİRİMİ ---
+        public void OnEnemyKilled(GameObject enemyObj)
         {
             if (!waveActive) return;
+            
+            // Listeden çıkar
+            if (activeEnemiesList.Contains(enemyObj))
+            {
+                activeEnemiesList.Remove(enemyObj);
+            }
+
             activeEnemyCount--;
             if (activeEnemyCount < 0) activeEnemyCount = 0;
             CheckEarlyWinCondition();
         }
+        // -----------------------------------
 
         private void CheckEarlyWinCondition()
         {
@@ -96,9 +95,11 @@ namespace IndianOceanAssets.Engine2_5D
             spawnedEnemiesCount = 0;
             activeEnemyCount = 0;
             totalEnemiesToSpawn = 0;
+            
+            // Listeyi güvenli temizle
+            activeEnemiesList.Clear(); 
 
             roundManager.InitializeRound(profile.roundDuration, profile.victoryDelay);
-            
             CalculatePoolRequirements(); 
 
             if (totalEnemiesToSpawn > 0)
@@ -108,22 +109,35 @@ namespace IndianOceanAssets.Engine2_5D
             StartNextWave();
         }
 
+        // --- OPTİMİZE EDİLMİŞ TEMİZLİK ---
         public void ForceClearWave()
         {
             StopWaveSpawning();
-            GameObject[] activeEnemies = GameObject.FindGameObjectsWithTag("Enemy");
-            foreach (GameObject enemy in activeEnemies)
+            
+            Debug.Log($"WaveManager: {activeEnemiesList.Count} aktif düşman temizleniyor.");
+
+            // Listeyi tersten dönerek güvenli silme yapıyoruz
+            for (int i = activeEnemiesList.Count - 1; i >= 0; i--)
             {
-                if (enemy.activeInHierarchy)
+                GameObject enemy = activeEnemiesList[i];
+                if (enemy != null && enemy.activeInHierarchy)
                 {
                     HealthSystem hs = enemy.GetComponent<HealthSystem>();
-                    if (hs != null) hs.Die(); 
+                    if (hs != null) hs.Die(); // Die metodu havuza yollar ve OnEnemyKilled çağırır
                     else enemy.SetActive(false);
                 }
             }
+            
+            activeEnemiesList.Clear();
+            activeEnemyCount = 0;
         }
+        // ---------------------------------
 
-        #region Core Logic (Değişmedi)
+        #region Core Logic
+        // ... (CalculatePoolRequirements, CreateDynamicPools, CleanupDynamicPools, StopWaveSpawning, Update, StartNextWave AYNI) ...
+        // Kod kalabalığı olmasın diye buraları kısalttım, eski lojiklerin aynısı kalacak.
+        // Sadece SpawnBurst içinde listeye ekleme yapacağız.
+
         private void CalculatePoolRequirements()
         {
             totalEnemiesToSpawn = 0; 
@@ -185,30 +199,20 @@ namespace IndianOceanAssets.Engine2_5D
         }
         private void Update() {
             if (!waveActive || !roundManager.IsRoundActive || currentRoundProfile == null) return;
-            
-            for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++)
-            {
+            for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++) {
                 if (nextEventTriggerTimes[i] == Mathf.Infinity) continue;
-                
-                if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
-                {
+                if (roundManager.TimeElapsed >= nextEventTriggerTimes[i]) {
                     SpawnEvent currentEvent = currentRoundProfile.spawnEvents[i];
                     StartCoroutine(SpawnBurst(currentEvent)); 
-
-                    if (currentEvent.isPeriodic)
-                    {
+                    if (currentEvent.isPeriodic) {
                         float nextSpawnTime = nextEventTriggerTimes[i] + currentEvent.repeatInterval;
                         float effectiveEndTime = (currentEvent.hasFiniteDuration && currentEvent.endTime < roundManager.RoundDuration) 
                                                  ? currentEvent.endTime : roundManager.RoundDuration;
-
-                        if (nextSpawnTime <= effectiveEndTime) nextEventTriggerTimes[i] = nextSpawnTime;
-                        else nextEventTriggerTimes[i] = Mathf.Infinity;
-                    }
-                    else nextEventTriggerTimes[i] = Mathf.Infinity;
+                        if (nextSpawnTime <= effectiveEndTime) nextEventTriggerTimes[i] = nextSpawnTime; else nextEventTriggerTimes[i] = Mathf.Infinity;
+                    } else nextEventTriggerTimes[i] = Mathf.Infinity;
                 }
             }
         }
-
         private void StartNextWave() {
             if (currentRoundProfile != null && currentRoundProfile.spawnEvents.Count > 0) {
                 nextEventTriggerTimes = new List<float>();
@@ -216,18 +220,26 @@ namespace IndianOceanAssets.Engine2_5D
                 waveActive = true;
             } else waveActive = false;
         }
-        
-        private IEnumerator SpawnBurst(SpawnEvent spawnEvent) {
+
+        private IEnumerator SpawnBurst(SpawnEvent spawnEvent)
+        {
             EnemyData data = spawnEvent.enemyDataToSpawn;
-            if (data != null && spawnPoints.ContainsKey(spawnEvent.spawnPointID)) {
+            if (data != null && spawnPoints.ContainsKey(spawnEvent.spawnPointID))
+            {
                 EnemySpawnPoint sp = spawnPoints[spawnEvent.spawnPointID];
                 Transform[] path = (spawnEvent.pathID != -1 && enemyPaths.ContainsKey(spawnEvent.pathID)) ? enemyPaths[spawnEvent.pathID].waypoints : null;
                 string tag = genericEnemyPrefab.name;
                 
-                for (int i = 0; i < spawnEvent.count; i++) {
+                for (int i = 0; i < spawnEvent.count; i++)
+                {
                     if (!waveActive) yield break;
                     GameObject obj = ObjectPooler.Instance.SpawnFromPool(tag, sp.transform.position, Quaternion.identity);
-                    if (obj != null) {
+                    if (obj != null)
+                    {
+                        // --- LİSTEYE EKLEME ---
+                        activeEnemiesList.Add(obj);
+                        // ---------------------
+                        
                         spawnedEnemiesCount++;
                         activeEnemyCount++;
                         

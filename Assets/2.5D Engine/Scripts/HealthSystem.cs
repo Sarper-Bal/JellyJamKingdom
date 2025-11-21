@@ -132,7 +132,7 @@ namespace IndianOceanAssets.Engine2_5D
                 // --- YENİ: WAVE MANAGER'A HABER VER ---
                 if (WaveManager.Instance != null)
                 {
-                    WaveManager.Instance.OnEnemyKilled();
+                    WaveManager.Instance.OnEnemyKilled(gameObject);
                 }
                 // --------------------------------------
 
