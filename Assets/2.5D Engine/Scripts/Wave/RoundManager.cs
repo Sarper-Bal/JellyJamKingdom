@@ -1,154 +1,93 @@
-/*
- * ROUND MANAGER (TETİKLEYİCİ - v3.1)
- * * DEĞİŞİKLİKLER (Güvenli Temizlik):
- * - 'ShowVictoryScreen()' Coroutine'i güncellendi.
- * - 'victoryDelay' bittikten sonraki sıralama değiştirildi:
- * 1. WaveManager.KillAllActiveEnemies() (Sahnede kalanları öldür)
- * 2. WaveManager.CleanupDynamicPools() (Havuzları temizle)
- * 3. victoryPanel.SetActive(true) (Ekranı göster)
- * - Bu, zafer ekranı göründüğünde sahnede düşman kalmamasını ve
- * efekt havuzu hatalarını engeller.
- */
-
 using UnityEngine;
-using TMPro; 
-using System.Collections;
-using UnityEngine.SceneManagement; 
-using IndianOceanAssets.Engine2_5D; // WaveManager'a erişim için
+using UnityEngine.UI;
+using TMPro; // TextMeshPro kütüphanesi eklendi
 
 namespace IndianOceanAssets.Engine2_5D
 {
     public class RoundManager : MonoBehaviour
     {
-        // Inspector'dan atanan değişkenler kaldırıldı.
-        private float currentRoundDuration;
-        private float currentVictoryDelay;
-        
-        [Header("UI")]
-        [Tooltip("Kalan süreyi gösterecek olan TextMeshPro objesi.")]
+        [Header("Görsel Ayarlar (İsteğe Bağlı)")]
+        [Tooltip("Dolup boşalan bar efekti için 'Image' objesi (Image Type: Filled olmalı).")]
+        [SerializeField] private Image timerBarImage;
+
+        [Tooltip("Seri numara sayacı için TextMeshPro objesi (Örn: 60, 59...).")]
         [SerializeField] private TextMeshProUGUI timerText;
 
-        [Tooltip("Tur bittiğinde gösterilecek olan 'Kazandın!' UI paneli.")]
-        [SerializeField] private GameObject victoryPanel; 
+        // Event
+        public event System.Action OnRoundEnded;
 
-        public float TimeElapsed { get; private set; }
-        public float RoundDuration => currentRoundDuration; 
         public bool IsRoundActive { get; private set; }
+        public float TimeElapsed { get; private set; }
+        public float RoundDuration { get; private set; }
 
-        
-        /// <summary>
-        /// RoundManager'ı, WaveProfile'dan gelen ayarlarla başlatır.
-        /// </summary>
-        public void InitializeRound(float duration, float delay)
-        {
-            this.currentRoundDuration = duration;
-            this.currentVictoryDelay = delay;
-            Debug.Log($"RoundManager: Tur Süresi {duration}s, Zafer Gecikmesi {delay}s olarak ayarlandı.");
-        }
-        
+        private float timer;
+        private bool roundEndedTriggered = false; 
 
-        private void Start()
+        public void InitializeRound(float duration, float victoryDelay)
         {
-            // Güvenlik kontrolü
-            if (currentRoundDuration == 0)
-            {
-                Debug.LogWarning("RoundManager.InitializeRound() çağrılmadı. Varsayılan süre (60s) kullanılıyor.");
-                currentRoundDuration = 60f;
-                currentVictoryDelay = 3f;
-            }
-            
+            RoundDuration = duration;
+            timer = duration;
             TimeElapsed = 0f;
             IsRoundActive = true;
+            roundEndedTriggered = false; 
+
+            // Barı fulle (Varsa)
+            if (timerBarImage != null) 
+                timerBarImage.fillAmount = 1f;
             
-            if (victoryPanel != null)
-            {
-                victoryPanel.SetActive(false);
-            }
+            // Yazıyı güncelle (Varsa)
+            UpdateTimerText();
         }
 
         private void Update()
         {
-            if (IsRoundActive)
+            if (!IsRoundActive) return;
+
+            // Geri sayım
+            timer -= Time.deltaTime;
+            TimeElapsed += Time.deltaTime;
+
+            // 1. Bar Güncellemesi (Varsa)
+            if (timerBarImage != null && RoundDuration > 0)
             {
-                TimeElapsed += Time.deltaTime;
-                float timeLeft = currentRoundDuration - TimeElapsed;
+                timerBarImage.fillAmount = Mathf.Clamp01(timer / RoundDuration);
+            }
 
-                if (timeLeft <= 0)
-                {
-                    timeLeft = 0;
-                    EndRound(); 
-                }
+            // 2. Yazı Güncellemesi (Varsa)
+            if (timerText != null)
+            {
+                UpdateTimerText();
+            }
 
-                UpdateTimerUI(timeLeft);
+            // Süre bitti mi?
+            if (timer <= 0)
+            {
+                EndRound();
             }
         }
-        
-        /// <summary>
-        /// Turu sonlandırır (Kazanma durumu).
-        /// Düşman spawn'ını HEMEN durdurur ve GECİKMELİ temizlik sürecini başlatır.
-        /// </summary>
-        private void EndRound()
-        {
-            if (!IsRoundActive) return; 
-            
-            IsRoundActive = false;
-            Debug.Log("Tur Bitti! (Kazanıldı). Yeni spawn'lar durduruldu.");
 
-            // 1. WaveManager'a YENİ spawn'ları HEMEN durdurma komutu ver.
-            if (WaveManager.Instance != null)
-            {
-                WaveManager.Instance.StopWaveSpawning();
-            }
-            
-            // 2. Gecikmeli olarak Zafer Ekranını ve Havuz Temizliğini tetikle.
-            StartCoroutine(ShowVictoryScreen());
-        }
-
-        /// <summary>
-        /// Gecikmeli olarak havuzları temizler ve "Kazanma" ekranını gösterir.
-        /// </summary>
-        private IEnumerator ShowVictoryScreen()
-        {
-            // 1. Lütuf zamanı (grace period) kadar bekle.
-            yield return new WaitForSeconds(currentVictoryDelay);
-
-            // --- DEĞİŞİKLİK BAŞLANGICI: Güvenli Temizlik Sıralaması ---
-            if (WaveManager.Instance != null)
-            {
-                // 2. Sahnede kalan tüm aktif düşmanları ÖLDÜR
-                //    (Onlar da havuzlarına geri dönecek)
-                WaveManager.Instance.KillAllActiveEnemies();
-                
-                // 3. Artık içi dolu olan dinamik havuzları TEMİZLE
-                WaveManager.Instance.CleanupDynamicPools();
-            }
-            // --- DEĞİŞİKLİK SONU ---
-
-            // 4. Zafer ekranını göster.
-            if (victoryPanel != null)
-            {
-                victoryPanel.SetActive(true);
-            }
-        }
-        
-        /// <summary>
-        /// Sahneyi yeniden yükler.
-        /// </summary>
-        public void ReloadScene()
-        {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        }
-
-        /// <summary>
-        /// Kalan saniyeyi "dakika:saniye" formatında UI'a yazdıran fonksiyon.
-        /// </summary>
-        private void UpdateTimerUI(float time)
+        private void UpdateTimerText()
         {
             if (timerText != null)
             {
-                int minutes = Mathf.FloorToInt(time / 60);
-                int seconds = Mathf.FloorToInt(time % 60);
-                timerText.text = string.Format("{0:0}:{1:00}", minutes, seconds);
+                // Sayıyı yukarı yuvarla (59.1 -> 60 gözüksün)
+                timerText.text = Mathf.CeilToInt(timer).ToString();
+            }
+        }
+
+        private void EndRound()
+        {
+            IsRoundActive = false;
+            
+            // Görselleri sıfırla
+            if (timerBarImage != null) timerBarImage.fillAmount = 0f;
+            if (timerText != null) timerText.text = "0";
+
+            if (!roundEndedTriggered)
+            {
+                roundEndedTriggered = true;
+                Debug.Log("RoundManager: Tur Bitti! Event tetikleniyor.");
+                OnRoundEnded?.Invoke();
             }
         }
     }

@@ -6021,9 +6021,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1be99b91fb3424c80b51dcc33b911d13, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  autoStart: 0
   genericEnemyPrefab: {fileID: 2150025513644625521, guid: 451fa6a449d47ab46bc71e9749ee8c1b, type: 3}
   roundManager: {fileID: 1979538491}
-  currentRoundProfile: {fileID: 11400000, guid: a9319c85cb0024d4fb0c9ca9b79ed42d, type: 2}
+  currentRoundProfile: {fileID: 0}
 --- !u!4 &990297988
 Transform:
   m_ObjectHideFlags: 0
@@ -9529,6 +9530,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1953460726}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1636743907
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1636743909}
+  - component: {fileID: 1636743908}
+  m_Layer: 0
+  m_Name: WaveController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1636743908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1636743907}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a782f30e8ec1f4c99aa163e29d404c0e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.WaveSequenceController
+  waveSequence: {fileID: 11400000, guid: df7ce53750a7a4a6d84ad5c18f308f51, type: 2}
+  roundManager: {fileID: 1979538491}
+--- !u!4 &1636743909
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1636743907}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1646875743 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3096411534657123468, guid: fc0b79ea16b3c9646a5eb6887112743a, type: 3}
@@ -11532,8 +11579,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ad32b52397da46468fd1323848cca16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  timerText: {fileID: 407776899}
-  victoryPanel: {fileID: 0}
+  timerBar: {fileID: 0}
 --- !u!4 &1979538492
 Transform:
   m_ObjectHideFlags: 0
@@ -11797,51 +11843,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: c4713705e955b8042ba8c694283782da, type: 3}
   m_PrefabInstance: {fileID: 1957664912}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &2003189518
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2003189520}
-  - component: {fileID: 2003189519}
-  m_Layer: 0
-  m_Name: EconmyManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &2003189519
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2003189518}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0b299d339a58a429496c848f882cff0d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EconomyManager
-  autoStartOnPlay: 1
---- !u!4 &2003189520
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2003189518}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &2016396848 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: bb332dc2f4decfa478c4d4ff4ea44d38, type: 3}
@@ -12927,10 +12928,10 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 330585546}
   - {fileID: 1254251011}
+  - {fileID: 1636743909}
   - {fileID: 1979538492}
   - {fileID: 990297988}
   - {fileID: 1592796606}
-  - {fileID: 2003189520}
   - {fileID: 420769806}
   - {fileID: 1038911034}
   - {fileID: 1208334975}
