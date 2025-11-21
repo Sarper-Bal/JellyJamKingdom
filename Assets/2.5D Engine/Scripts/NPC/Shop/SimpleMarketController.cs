@@ -26,47 +26,19 @@ public class SimpleMarketController : MonoBehaviour
     private bool isWorkerBusy = false;
     private FriendlyNpcAI permanentWorker; 
     private List<ResourceData> possibleRequests;
-    private bool isRunning = false; // Market çalışıyor mu?
+    private bool isRunning = false; 
 
     private IEnumerator Start()
     {
         // 1. Pooler'ı bekle
         yield return new WaitUntil(() => NpcPooler.Instance != null);
         
-        // 2. Kurulumları yap (Init) ama BAŞLATMA
+        // 2. Kurulumları yap
         InitializeMarket();
 
-        // 3. EconomyManager'a Abone Ol
-        if (EconomyManager.Instance != null)
-        {
-            EconomyManager.Instance.OnEconomyStart += StartMarketLoop;
-            EconomyManager.Instance.OnEconomyStop += StopMarketLoop;
-
-            // Eğer yönetici zaten çalışıyorsa biz de başlayalım
-            if (EconomyManager.Instance.IsSystemActive)
-            {
-                StartMarketLoop();
-            }
-        }
-        else
-        {
-            // Yönetici yoksa eski usül otomatik başla (Güvenlik)
-            Debug.LogWarning($"SimpleMarket ({name}): EconomyManager bulunamadı, otomatik başlatılıyor.");
-            StartMarketLoop();
-        }
+        // 3. EconomyManager beklemeden direkt başla
+        StartMarketLoop();
     }
-
-    private void OnDestroy()
-    {
-        // Abonelikten çık (Memory Leak önlemi)
-        if (EconomyManager.Instance != null)
-        {
-            EconomyManager.Instance.OnEconomyStart -= StartMarketLoop;
-            EconomyManager.Instance.OnEconomyStop -= StopMarketLoop;
-        }
-    }
-
-    // --- YENİ: BAŞLAT/DURDUR KONTROLLERİ ---
 
     public void StartMarketLoop()
     {
@@ -79,10 +51,8 @@ public class SimpleMarketController : MonoBehaviour
     public void StopMarketLoop()
     {
         isRunning = false;
-        StopAllCoroutines(); // Döngüleri durdur
+        StopAllCoroutines(); 
     }
-
-    // --- INIT VE LOGIC (ESKİ KODLARIN DÜZENLENMİŞ HALİ) ---
 
     private void InitializeMarket()
     {
@@ -90,12 +60,10 @@ public class SimpleMarketController : MonoBehaviour
 
         possibleRequests = marketData.GetSellableResources();
         
-        // Müşteri Havuzu
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
             CustomerPooler.Instance.RegisterPool(marketData.customerPrefab, queueSpots.Length + 2);
 
-        // İşçi Havuzu
         if (NpcPooler.Instance != null && marketData.workerPrefab != null)
             NpcPooler.Instance.CreatePool(marketData.workerPoolTag, marketData.workerPrefab.gameObject, 1);
     }
@@ -118,10 +86,6 @@ public class SimpleMarketController : MonoBehaviour
             yield return new WaitForSeconds(0.5f);
         }
     }
-
-    // ... (TrySpawnCustomer, SpawnCustomerAtSlot, ShiftQueue, ManageWorkerLogic, DispatchWorker AYNI) ...
-    // Kod tekrarı olmaması için alttaki lojistik metodları aynen koruyoruz.
-    // Sadece class'ın geri kalanının çalıştığını varsayıyoruz.
     
     #region Core Logic (Unchanged)
     private void TrySpawnCustomer() {

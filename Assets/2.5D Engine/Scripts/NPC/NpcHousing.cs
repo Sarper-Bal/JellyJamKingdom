@@ -7,7 +7,6 @@ public class NpcHousing : MonoBehaviour
     [Header("Veri")]
     [SerializeField] private NpcHousingData housingData;
     
-    // ... (Diğer değişkenler aynı) ...
     [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource; 
     [SerializeField] private WorkSpotInteractable resourceTarget;
     [SerializeField] public NpcHousing houseTarget; 
@@ -27,26 +26,11 @@ public class NpcHousing : MonoBehaviour
     {
         if (housingData == null) return;
         
-        if (EconomyManager.Instance != null)
-        {
-            EconomyManager.Instance.OnEconomyStart += StartHousing;
-            EconomyManager.Instance.OnEconomyStop += StopHousing;
-            if (EconomyManager.Instance.IsSystemActive) StartHousing();
-        }
-        else
-        {
-            StartHousing();
-        }
+        // EconomyManager bağımlılığı kaldırıldı. Direkt başlıyor.
+        StartHousing();
     }
 
-    private void OnDestroy()
-    {
-        if (EconomyManager.Instance != null)
-        {
-            EconomyManager.Instance.OnEconomyStart -= StartHousing;
-            EconomyManager.Instance.OnEconomyStop -= StopHousing;
-        }
-    }
+    // OnDestroy'da abonelikten çıkma işlemine gerek kalmadı.
 
     public void StartHousing()
     {
@@ -62,11 +46,9 @@ public class NpcHousing : MonoBehaviour
         StopAllCoroutines();
     }
 
-    // ... (Geri kalan mantık aynı, sadece 'isRunning' kontrolü eklenebilir ama StopAllCoroutines zaten işi görüyor) ...
-    
     #region Core Logic (Unchanged)
     private IEnumerator ProductionRoutine() {
-        while (isRunning) { // isRunning kontrolü
+        while (isRunning) { 
             if (inputRawMaterialCount >= housingData.conversionRate) {
                 isProducing = true;
                 yield return new WaitForSeconds(housingData.conversionTime);
@@ -85,7 +67,7 @@ public class NpcHousing : MonoBehaviour
         Transform home = (spawnPoint != null) ? spawnPoint : transform;
         string tag = housingData.genericNpcPrefab.name;
         for (int i = 0; i < housingData.populationCount; i++) {
-            if(!isRunning) yield break; // Durdurulduysa spawn etme
+            if(!isRunning) yield break; 
             FriendlyNpcAI ai = NpcPooler.Instance.SpawnFromPool(tag, pos, Quaternion.identity);
             if (ai != null) {
                 OnNpcReadyToWork?.Invoke(ai, this);
@@ -98,7 +80,7 @@ public class NpcHousing : MonoBehaviour
             yield return new WaitForSeconds(housingData.spawnInterval);
         }
     }
-    // ... (Diğer yardımcı metotlar DetermineWorkTarget, HandleNpcArrivedAtWork, RestCycle vb. aynen kalıyor) ...
+    
     private Transform DetermineWorkTarget() {
         if (jobType == NpcJobType.GatherResource && resourceTarget != null) return (resourceTarget.interactionPoint != null) ? resourceTarget.interactionPoint : resourceTarget.transform;
         else if (jobType == NpcJobType.TransferResource && houseTarget != null) return houseTarget.GetSpawnPoint();
@@ -132,7 +114,7 @@ public class NpcHousing : MonoBehaviour
     }
     private IEnumerator RestCycle(FriendlyNpcAI npc, float duration) {
         yield return new WaitForSeconds(duration);
-        if(npc != null && isRunning) { // isRunning kontrolü
+        if(npc != null && isRunning) { 
             OnNpcReadyToWork?.Invoke(npc, this);
             Transform newWork = DetermineWorkTarget();
             npc.Activate(housingData.npcDataToSpawn, (spawnPoint != null ? spawnPoint : transform), newWork, optionalNpcPath);
