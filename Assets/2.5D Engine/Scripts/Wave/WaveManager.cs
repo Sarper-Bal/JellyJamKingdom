@@ -12,8 +12,8 @@ namespace IndianOceanAssets.Engine2_5D
         public static WaveManager Instance { get; private set; }
         #endregion
 
-        [Header("Sistem")]
-        public bool autoStart = false;
+        // --- TEMİZLİK: 'autoStart' SİLİNDİ --- 
+        // Artık sadece emir bekleyen bir sistem.
 
         [Header("Havuz")]
         [SerializeField] private GameObject genericEnemyPrefab;
@@ -21,15 +21,17 @@ namespace IndianOceanAssets.Engine2_5D
         [Header("Referanslar")]
         [SerializeField] private RoundManager roundManager;
         
-        [Header("Veri")]
-        [SerializeField] private WaveProfile currentRoundProfile; 
+        // --- TEMİZLİK: 'currentRoundProfile' GİZLENDİ ---
+        // Inspector'dan atama yapmıyoruz, runtime (çalışma anı) verisidir.
+        private WaveProfile currentRoundProfile; 
         
-        // --- YENİ: MUHASEBE DEĞİŞKENLERİ ---
-        private int totalEnemiesToSpawn = 0; // Bu dalgada çıkacak TOPLAM düşman
-        private int spawnedEnemiesCount = 0; // Şu ana kadar doğanlar
-        private int activeEnemyCount = 0;    // Şu an sahnede canlı olanlar
-        // -----------------------------------
+        // Muhasebe Değişkenleri
+        private int totalEnemiesToSpawn = 0; 
+        private int spawnedEnemiesCount = 0; 
+        private int activeEnemyCount = 0;    
         
+        // Runtime Veriler
+        private int totalEnemyPoolSize = 0;
         private Dictionary<GameObject, int> dynamicEffectPools;
         private Dictionary<int, EnemySpawnPoint> spawnPoints = new Dictionary<int, EnemySpawnPoint>();
         private Dictionary<int, EnemyPath> enemyPaths = new Dictionary<int, EnemyPath>();
@@ -41,63 +43,65 @@ namespace IndianOceanAssets.Engine2_5D
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            
+            // Sahne taramaları
             spawnPoints = FindObjectsOfType<EnemySpawnPoint>().ToDictionary(sp => sp.spawnPointID);
             enemyPaths = FindObjectsOfType<EnemyPath>().ToDictionary(path => path.pathID);
         }
 
         private void Start()
         {
+            // Referans Kontrolleri
             if (roundManager == null) Debug.LogError("WaveManager: RoundManager eksik!");
+            if (genericEnemyPrefab == null) Debug.LogError("WaveManager: Generic Enemy Prefab eksik!");
+            
             GameObject playerGO = GameObject.FindGameObjectWithTag("Player");
             if (playerGO != null) playerTarget = playerGO.transform;
-            if (autoStart && currentRoundProfile != null) LoadAndStartWave(currentRoundProfile);
+
+            // --- TEMİZLİK: OTO-BAŞLATMA KODU SİLİNDİ ---
+            // WaveManager artık Start'ta hiçbir şey yapmaz.
+            // WaveSequenceController'ın 'LoadAndStartWave' çağırmasını bekler.
         }
 
-        // --- YENİ: DÜŞMAN ÖLDÜ BİLDİRİMİ ---
+        // --- DIŞARIDAN EMİR ALMA (Giriş Kapısı) ---
+        public void LoadAndStartWave(WaveProfile profile)
+        {
+            if (profile == null) return;
+
+            // Temizlik yap ve yeni profile geç
+            CleanupDynamicPools();
+            currentRoundProfile = profile; // Veriyi içeri al
+            StartWaveRoutine(profile);
+        }
+
         public void OnEnemyKilled()
         {
             if (!waveActive) return;
-
             activeEnemyCount--;
-            
-            // Güvenlik kontrolü (Negatif sayı olmasın)
             if (activeEnemyCount < 0) activeEnemyCount = 0;
-
             CheckEarlyWinCondition();
         }
 
         private void CheckEarlyWinCondition()
         {
-            // Kural: Tüm düşmanlar doğduysa (spawned >= total) VE hiç canlı kalmadıysa (active == 0)
             if (spawnedEnemiesCount >= totalEnemiesToSpawn && activeEnemyCount == 0)
             {
                 Debug.Log("WaveManager: Erken Zafer! (Early Win)");
                 if (roundManager != null) roundManager.ForceEndRound();
             }
         }
-        // ------------------------------------
-
-        public void LoadAndStartWave(WaveProfile profile)
-        {
-            if (profile == null) return;
-            CleanupDynamicPools();
-            currentRoundProfile = profile;
-            StartWaveRoutine(profile);
-        }
 
         private void StartWaveRoutine(WaveProfile profile)
         {
-            // Sayaçları Sıfırla
             spawnedEnemiesCount = 0;
             activeEnemyCount = 0;
             totalEnemiesToSpawn = 0;
 
             roundManager.InitializeRound(profile.roundDuration, profile.victoryDelay);
             
-            // Toplam düşmanı hesapla (totalEnemiesToSpawn burada dolacak)
             CalculatePoolRequirements(); 
 
-            if (totalEnemiesToSpawn > 0) // totalEnemiesToSpawn aynı zamanda havuz boyutu
+            if (totalEnemiesToSpawn > 0)
                 ObjectPooler.Instance.CreatePool(genericEnemyPrefab.name, genericEnemyPrefab, totalEnemiesToSpawn);
             
             CreateDynamicPools(dynamicEffectPools);
@@ -119,9 +123,10 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
+        #region Core Logic (Değişmedi)
         private void CalculatePoolRequirements()
         {
-            totalEnemiesToSpawn = 0; // Sıfırla
+            totalEnemiesToSpawn = 0; 
             dynamicEffectPools = new Dictionary<GameObject, int>();
 
             if (currentRoundProfile == null) return;
@@ -129,7 +134,6 @@ namespace IndianOceanAssets.Engine2_5D
             
             foreach (SpawnEvent spawnEvent in currentRoundProfile.spawnEvents)
             {
-                // ... (Hesaplama mantığı aynı, sadece totalEnemiesToSpawn'a ekleme yapıyoruz) ...
                 EnemyData enemyData = spawnEvent.enemyDataToSpawn;
                 if (enemyData == null) continue;
 
@@ -154,7 +158,7 @@ namespace IndianOceanAssets.Engine2_5D
                 
                 if (countForThisEvent == 0) continue; 
 
-                totalEnemiesToSpawn += countForThisEvent; // TOPLAM SAYIYI TUTUYORUZ
+                totalEnemiesToSpawn += countForThisEvent; 
 
                 if (enemyData.deathEffectPrefab != null)
                 {
@@ -163,7 +167,6 @@ namespace IndianOceanAssets.Engine2_5D
                     dynamicEffectPools[enemyData.deathEffectPrefab] += countForThisEvent; 
                 }
             }
-            Debug.Log($"WaveManager: Bu dalga için Toplam Beklenen Düşman: {totalEnemiesToSpawn}");
         }
 
         private void CreateDynamicPools(Dictionary<GameObject, int> poolDict)
@@ -182,13 +185,11 @@ namespace IndianOceanAssets.Engine2_5D
         }
         private void Update() {
             if (!waveActive || !roundManager.IsRoundActive || currentRoundProfile == null) return;
-            float currentTime = roundManager.RoundDuration - GetRemainingTime(); // Basit zaman hesabı
-            // ... (Update mantığı aynı, zamanlayıcıları kontrol eder) ...
-             for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++)
+            
+            for (int i = 0; i < currentRoundProfile.spawnEvents.Count; i++)
             {
                 if (nextEventTriggerTimes[i] == Mathf.Infinity) continue;
-                // RoundManager zamanı geriye sayıyor, biz geçen zamanı (Duration - CurrentTimer) bulabiliriz
-                // Veya RoundManager'a TimeElapsed eklemiştik, onu kullanalım:
+                
                 if (roundManager.TimeElapsed >= nextEventTriggerTimes[i])
                 {
                     SpawnEvent currentEvent = currentRoundProfile.spawnEvents[i];
@@ -207,7 +208,6 @@ namespace IndianOceanAssets.Engine2_5D
                 }
             }
         }
-        private float GetRemainingTime() { return 0; /* Placeholder */ } // Kullanılmıyor, RoundManager.TimeElapsed kullanıyoruz.
 
         private void StartNextWave() {
             if (currentRoundProfile != null && currentRoundProfile.spawnEvents.Count > 0) {
@@ -228,10 +228,8 @@ namespace IndianOceanAssets.Engine2_5D
                     if (!waveActive) yield break;
                     GameObject obj = ObjectPooler.Instance.SpawnFromPool(tag, sp.transform.position, Quaternion.identity);
                     if (obj != null) {
-                        // --- YENİ: SAYIM YAP ---
                         spawnedEnemiesCount++;
                         activeEnemyCount++;
-                        // -----------------------
                         
                         obj.GetComponent<EnemyAI>()?.Initialize(data, playerTarget, path);
                         obj.GetComponent<IPooledObject>().PoolTag = tag;
@@ -240,5 +238,6 @@ namespace IndianOceanAssets.Engine2_5D
                 }
             }
         }
+        #endregion
     }
 }
