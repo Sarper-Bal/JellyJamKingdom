@@ -201,4 +201,24 @@ public class PlayerStats : MonoBehaviour
     
     public void AddBurstFireDelayModifier(StatModifier mod) => AddModifier(mod, burstFireDelayModifiers);
     public bool RemoveBurstFireDelayModifiersFromSource(object source) => RemoveModifiersFromSource(source, burstFireDelayModifiers);
+
+    public void Initialize(PlayerStatsData newData)
+    {
+        if (newData == null)
+        {
+            Debug.LogWarning("PlayerStats: Initialize için boş veri gönderildi!");
+            return;
+        }
+
+        // 1. Veriyi değiştir
+        this.baseStatsData = newData;
+
+        // 2. Görseli yenile (Eğer yeni datada farklı bir sprite varsa)
+        InitializeVisuals();
+
+        // 3. Statları yeni veriye göre tekrar hesapla
+        RecalculateAllStats();
+        
+        Debug.Log($"PlayerStats: Karakter verisi '{newData.name}' olarak güncellendi.");
+    }
 }

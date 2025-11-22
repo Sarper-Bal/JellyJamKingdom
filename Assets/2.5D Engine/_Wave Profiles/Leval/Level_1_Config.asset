@@ -12,8 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f22cef4620494112986372f0748f670, type: 3}
   m_Name: Level_1_Config
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.LevelData
+  sceneAsset: {fileID: 102900000, guid: 3d3f54eac3ae9914fa9fc5f1582218f3, type: 3}
   sceneName: DEMO 1
-  heroStats: {fileID: 11400000, guid: c4b35352a1cc140409bbc79d675cb2dc, type: 2}
+  heroStats: {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
   towerStats:
   - {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
   levelWaves: {fileID: 11400000, guid: df7ce53750a7a4a6d84ad5c18f308f51, type: 2}

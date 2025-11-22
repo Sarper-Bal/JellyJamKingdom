@@ -820,7 +820,7 @@ PrefabInstance:
     - target: {fileID: 3159502058116077875, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: baseStatsData
       value: 
-      objectReference: {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
+      objectReference: {fileID: 0}
     - target: {fileID: 3732617863691343031, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -831,7 +831,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3732617863691343031, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -5.81
       objectReference: {fileID: 0}
     - target: {fileID: 3732617863691343031, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
       propertyPath: m_LocalRotation.w
@@ -886,6 +886,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+--- !u!114 &188104321 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3159502058116077875, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+  m_PrefabInstance: {fileID: 188104320}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf8fb1b718b9c40ef842ff58e97dfdc1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerStats
 --- !u!1 &190655308
 GameObject:
   m_ObjectHideFlags: 0
@@ -915,8 +926,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0de675cd28ec1430ab692cea3468075a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.BattleInitializer
-  heroSpawnPoint: {fileID: 1095722088}
-  heroPrefab: {fileID: 7107154609808163723, guid: caf051d43a1fd9344a29f0c7376bbf5f, type: 3}
+  sceneHero: {fileID: 188104321}
   waveController: {fileID: 1636743908}
   sceneTowers:
   - {fileID: 641526034}
@@ -3518,7 +3528,7 @@ Transform:
   m_GameObject: {fileID: 641526029}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.58, y: 1.11, z: -4.95}
+  m_LocalPosition: {x: 0.58, y: 1.11, z: 11.27}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3576,7 +3586,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf8fb1b718b9c40ef842ff58e97dfdc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStats
-  baseStatsData: {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
+  baseStatsData: {fileID: 0}
   characterGfxRenderer: {fileID: 0}
 --- !u!114 &641526035
 MonoBehaviour:
@@ -11640,7 +11650,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2642219872392875436
 Transform:
   m_ObjectHideFlags: 0
@@ -12000,7 +12010,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!65 &5028525665483962033
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -12232,6 +12242,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NpcPooler
       objectReference: {fileID: 0}
+    - target: {fileID: 6301829963662388935, guid: 04b42bf447722431bbd88d0ac7199181, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12272,7 +12286,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &6745267828720980726
 Transform:
   m_ObjectHideFlags: 0
@@ -12448,6 +12462,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: CustomerPooler
       objectReference: {fileID: 0}
+    - target: {fileID: 1381448576004146940, guid: 6baf7c69962184a8bad9f6b97c6829b1, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12567,7 +12585,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &8126776591976509850
 Transform:
   m_ObjectHideFlags: 0

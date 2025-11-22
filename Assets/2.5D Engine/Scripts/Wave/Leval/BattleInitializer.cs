@@ -1,82 +1,72 @@
 using UnityEngine;
 using System.Collections.Generic;
+using IndianOceanAssets.Engine2_5D;
 
-namespace IndianOceanAssets.Engine2_5D
+[DefaultExecutionOrder(-1)] 
+public class BattleInitializer : MonoBehaviour
 {
-    [DefaultExecutionOrder(-1)] // WaveController'dan hemen önce çalışmalı
-    public class BattleInitializer : MonoBehaviour
+    [Header("Sahne Referansları")]
+    [Tooltip("Sahnede duran Player objesini buraya sürükle.")]
+    [SerializeField] private PlayerStats sceneHero; 
+    
+    [SerializeField] private WaveSequenceController waveController;
+
+    [Header("Kuleler")]
+    [Tooltip("Sahnede yerleştirdiğin kuleleri buraya sürükle (Sırası LevelData ile aynı olmalı).")]
+    [SerializeField] private List<PlayerStats> sceneTowers; 
+
+    private void Start()
     {
-        [Header("Sahne Referansları")]
-        [SerializeField] private Transform heroSpawnPoint;
-        [SerializeField] private GameObject heroPrefab;
-        [SerializeField] private WaveSequenceController waveController;
-
-        [Header("Kuleler")]
-        [Tooltip("Sahnede yerleştirdiğin kuleleri buraya sürükle. LevelData'daki liste sırasıyla eşleşecek.")]
-        [SerializeField] private List<PlayerStats> sceneTowers; 
-
-        private void Start()
+        // 1. Data Kontrolü
+        if (GameManager.Instance == null || GameManager.Instance.PendingLevelData == null)
         {
-            // 1. GameManager'dan Veriyi Al
-            LevelData data = null;
-            
-            if (GameManager.Instance != null)
-            {
-                data = GameManager.Instance.PendingLevelData;
-            }
-
-            if (data == null)
-            {
-                Debug.LogWarning("BattleInitializer: GameManager verisi yok! (Test için sahneden başlatılmış olabilir).");
-                // Test modundaysak varsayılan bir şey yapabilir veya durabiliriz.
-                return; 
-            }
-
-            InitializeBattle(data);
+            Debug.LogWarning("BattleInitializer: GameManager verisi yok! Test modunda çalışıyor olabilir.");
+            // Test için sahnedeki player kendi varsayılan ayarlarıyla devam eder.
+            return; 
         }
 
-        private void InitializeBattle(LevelData data)
+        LevelData data = GameManager.Instance.PendingLevelData;
+        InitializeBattle(data);
+    }
+
+    private void InitializeBattle(LevelData data)
+    {
+        Debug.Log($"<color=green>BattleInitializer: {data.sceneName} verisi enjekte ediliyor...</color>");
+
+        // --- ADIM A: HERO VERİSİNİ YÜKLE ---
+        if (sceneHero != null)
         {
-            Debug.Log($"<color=green>BattleInitializer: {data.name} verisiyle kurulum yapılıyor...</color>");
-
-            // A. Hero Spawn & Setup
-            if (heroPrefab != null && heroSpawnPoint != null)
+            // Dışarıdan gelen kahraman özelliklerini sahnedeki karaktere yükle
+            sceneHero.Initialize(data.heroStats);
+            
+            // Kamerayı da garanti olsun diye tekrar bu karaktere kilitle
+            if (CameraFollow.Instance != null)
             {
-                GameObject hero = Instantiate(heroPrefab, heroSpawnPoint.position, Quaternion.identity);
-                
-                // Eğer PlayerStats scriptinde Initialize metodu varsa çağır
-                // Yoksa, statları otomatik alıyordur (PlayerStats yapına göre burası değişebilir)
-                /* * ÖNEMLİ: PlayerStats scriptine 'public void Initialize(PlayerStatsData data)' 
-                 * metodu eklemen gerekebilir. Eğer yoksa şimdilik prefab'ın kendi statlarını kullanır.
-                 */
+                CameraFollow.Instance.SetTarget(sceneHero.transform);
             }
+        }
+        else
+        {
+            Debug.LogError("BattleInitializer: 'Scene Hero' atanmamış! Lütfen Inspector'dan sahnedeki Player'ı sürükleyin.");
+        }
 
-            // B. Kule Setup (Sahnedeki kulelere veri enjekte et)
-            for (int i = 0; i < sceneTowers.Count; i++)
+        // --- ADIM B: KULE VERİLERİNİ YÜKLE ---
+        for (int i = 0; i < sceneTowers.Count; i++)
+        {
+            // Data listesinde bu kule için karşılık gelen bir veri var mı?
+            if (data.towerStats != null && i < data.towerStats.Count)
             {
-                // Eğer Data listesinde bu kule için veri varsa
-                if (data.towerStats != null && i < data.towerStats.Count)
+                if (sceneTowers[i] != null)
                 {
-                    PlayerStatsData towerData = data.towerStats[i];
-                    if (sceneTowers[i] != null)
-                    {
-                        // Kulenin statlarını güncelle (Eğer PlayerStats destekliyorsa)
-                        // sceneTowers[i].Initialize(towerData); 
-                        Debug.Log($"Kule {i+1} statları güncellendi: {towerData.name}");
-                    }
+                    sceneTowers[i].Initialize(data.towerStats[i]);
                 }
             }
+        }
 
-            // C. Wave Setup & Start (KRİTİK NOKTA)
-            if (waveController != null && data.levelWaves != null)
-            {
-                // WaveController'a "Hazır ol, bu listeyi oynatacağız" diyoruz
-                waveController.InitializeFromExternal(data.levelWaves);
-            }
-            else
-            {
-                Debug.LogError("BattleInitializer: WaveController veya LevelWaves verisi eksik!");
-            }
+        // --- ADIM C: DALGAYI BAŞLAT ---
+        if (waveController != null && data.levelWaves != null)
+        {
+            waveController.InitializeFromExternal(data.levelWaves);
         }
     }
 }
