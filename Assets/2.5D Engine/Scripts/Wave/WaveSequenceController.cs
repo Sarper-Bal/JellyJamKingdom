@@ -14,27 +14,32 @@ namespace IndianOceanAssets.Engine2_5D
         private int currentWaveIndex = 0;
         private bool sequenceStarted = false;
 
-private IEnumerator Start()
+        private IEnumerator Start()
         {
+            // Başlangıçta diğer sistemlerin hazır olmasını bekle
             yield return new WaitForEndOfFrame();
 
             if (roundManager == null) roundManager = FindObjectOfType<RoundManager>();
-            if (roundManager != null) roundManager.OnRoundEnded += HandleRoundEnded;
-
-            // DİKKAT: Burada artık LoadWave(0) çağırmıyoruz!
-            // Çünkü verinin BattleInitializer'dan gelmesini bekleyeceğiz.
+            if (roundManager != null)
+            {
+                roundManager.OnRoundEnded += HandleRoundEnded;
+            }
+            
+            // Not: Artık otomatik başlamıyor, BattleInitializer'dan emir bekliyor.
         }
 
-        // YENİ METOT: Dışarıdan Başlatma
+        /// <summary>
+        /// BattleInitializer tarafından çağrılır ve savaşı başlatır.
+        /// </summary>
         public void InitializeFromExternal(WaveSequence sequence)
         {
-            this.waveSequence = sequence; // Dışarıdan gelen veriyi al
+            this.waveSequence = sequence;
             
             if (this.waveSequence != null && this.waveSequence.waves.Count > 0)
             {
                 Debug.Log("WaveSequenceController: Dışarıdan veri alındı, savaş başlıyor!");
                 sequenceStarted = true;
-                LoadWave(0); // Ve başlat
+                LoadWave(0); // İlk dalgayı yükle
             }
             else
             {
@@ -50,12 +55,35 @@ private IEnumerator Start()
 
         private void LoadWave(int index)
         {
+            // --- 1. LİSTE SONU KONTROLÜ (BİTİŞ VEYA DÖNGÜ) ---
             if (index >= waveSequence.waves.Count)
             {
-                if (waveSequence.loopSequence) index = 0;
-                else return;
+                if (waveSequence.loopSequence)
+                {
+                    Debug.Log("WaveSequenceController: Liste bitti, başa dönülüyor (Loop).");
+                    index = 0;
+                }
+                else
+                {
+                    Debug.Log("WaveSequenceController: Tüm dalgalar bitti. Savaş kazanıldı! Köye dönülüyor...");
+                    
+                    // --- YENİ EKLENEN KISIM: KÖYE DÖNÜŞ ---
+                    if (GameManager.Instance != null)
+                    {
+                        // Köy sahnesini yükle
+                        GameManager.Instance.ReturnToVillage();
+                    }
+                    else
+                    {
+                        Debug.LogWarning("WaveSequenceController: GameManager bulunamadı, köye dönülemiyor!");
+                    }
+                    // ---------------------------------------
+                    
+                    return; // Fonksiyondan çık, yeni dalga yükleme
+                }
             }
 
+            // --- 2. YENİ DALGAYI YÜKLE ---
             currentWaveIndex = index;
             WaveProfile profileToPlay = waveSequence.waves[currentWaveIndex];
 
@@ -67,12 +95,12 @@ private IEnumerator Start()
             }
         }
 
-        // Tur bittiğinde burası çalışır
+        // Bir tur bittiğinde (Süre doldu veya erken zafer)
         private void HandleRoundEnded()
         {
             if (!sequenceStarted) return;
 
-            // 1. ÖNCE SAHNEYİ TEMİZLE (Kullanıcı İsteği)
+            // 1. Sahneyi temizle
             if (WaveManager.Instance != null)
             {
                 WaveManager.Instance.ForceClearWave();
@@ -80,16 +108,16 @@ private IEnumerator Start()
 
             Debug.Log($"Tur Bitti. {waveSequence.delayBetweenWaves} saniye bekleniyor...");
             
-            // 2. SONRA BEKLE VE YENİSİNE GEÇ
+            // 2. Bekle ve bir sonraki kararı ver (Yeni dalga mı, Köye dönüş mü?)
             StartCoroutine(WaitAndStartNext());
         }
 
         private IEnumerator WaitAndStartNext()
         {
-            // Ayarlanan süre kadar bekle (Sahne şu an boş)
+            // İki dalga arasındaki bekleme süresi
             yield return new WaitForSeconds(waveSequence.delayBetweenWaves);
             
-            // Yeni dalgayı başlat
+            // Sıradaki dalgayı yüklemeyi dene (LoadWave içinde bitiş kontrolü yapılacak)
             LoadWave(currentWaveIndex + 1);
         }
     }

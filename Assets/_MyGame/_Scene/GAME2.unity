@@ -18733,6 +18733,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 91146855efda74d5c885c8fab5875035, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.GameManager
+  villageSceneAsset: {fileID: 102900000, guid: fff54b3d1b2c74d59baebc2b2cbf9bef, type: 3}
+  villageSceneName: GAME2
 --- !u!4 &1386530073
 Transform:
   m_ObjectHideFlags: 0
