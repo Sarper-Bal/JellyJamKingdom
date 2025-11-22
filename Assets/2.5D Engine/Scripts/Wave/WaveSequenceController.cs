@@ -14,26 +14,32 @@ namespace IndianOceanAssets.Engine2_5D
         private int currentWaveIndex = 0;
         private bool sequenceStarted = false;
 
-        private IEnumerator Start()
+private IEnumerator Start()
         {
             yield return new WaitForEndOfFrame();
 
-            if (waveSequence == null || waveSequence.waves.Count == 0)
-            {
-                Debug.LogWarning("WaveSequenceController: Liste boş!");
-                yield break;
-            }
-
             if (roundManager == null) roundManager = FindObjectOfType<RoundManager>();
+            if (roundManager != null) roundManager.OnRoundEnded += HandleRoundEnded;
 
-            if (roundManager != null)
+            // DİKKAT: Burada artık LoadWave(0) çağırmıyoruz!
+            // Çünkü verinin BattleInitializer'dan gelmesini bekleyeceğiz.
+        }
+
+        // YENİ METOT: Dışarıdan Başlatma
+        public void InitializeFromExternal(WaveSequence sequence)
+        {
+            this.waveSequence = sequence; // Dışarıdan gelen veriyi al
+            
+            if (this.waveSequence != null && this.waveSequence.waves.Count > 0)
             {
-                // Event'e abone ol
-                roundManager.OnRoundEnded += HandleRoundEnded;
+                Debug.Log("WaveSequenceController: Dışarıdan veri alındı, savaş başlıyor!");
+                sequenceStarted = true;
+                LoadWave(0); // Ve başlat
             }
-
-            LoadWave(0);
-            sequenceStarted = true;
+            else
+            {
+                Debug.LogError("WaveSequenceController: Geçersiz WaveSequence verisi!");
+            }
         }
 
         private void OnDestroy()
