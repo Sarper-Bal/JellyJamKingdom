@@ -15,7 +15,7 @@ MonoBehaviour:
   customerSpawnInterval: 2
   currencyResource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
   priceList:
-  - itemToSell: {fileID: 11400000, guid: 20159e376332f441bb3a452673301d5d, type: 2}
+  - itemToSell: {fileID: 11400000, guid: 1279879e028c94799a5ca18bf6d72dbe, type: 2}
     pricePerUnit: 2
   - itemToSell: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
     pricePerUnit: 1

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcHousingData
   genericNpcPrefab: {fileID: 2150025513644625521, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
   npcDataToSpawn: {fileID: 11400000, guid: d317f3f9b283849d2850aedeeec1ebab, type: 2}
-  populationCount: 3
+  populationCount: 1
   spawnInterval: 1.5
   restDuration: 3
   producedResource: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
