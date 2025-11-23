@@ -6394,6 +6394,50 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6444938042820886462, guid: 3b981a52cd7a36348a486a31fb75ac62, type: 3}
   m_PrefabInstance: {fileID: 668214421}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &546400040
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 546400042}
+  - component: {fileID: 546400041}
+  m_Layer: 0
+  m_Name: SaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &546400041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 546400040}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31f9afe3659f6469e8a539b71b43242a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.SaveManager
+--- !u!4 &546400042
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 546400040}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &549199531 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: ec0d35a4be35e314e9c39eee70cc636b, type: 3}
@@ -7525,10 +7569,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01ff2edc53d654749987da126bc3ef6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.AutoUpgradeSystem
-  potentialUpgrades:
-  - {fileID: 11400000, guid: 72905c2022765429fb8c24849a61b5c9, type: 2}
-  - {fileID: 11400000, guid: b43799fe7b87645c9988b424afad09db, type: 2}
-  roundManager: {fileID: 1582115382}
+  debugLevelData: {fileID: 0}
 --- !u!4 &637269857
 Transform:
   m_ObjectHideFlags: 0
@@ -11762,6 +11803,52 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1303924501894164468, guid: 9153b5c1efc227d4da1bca3a05e0d762, type: 3}
   m_PrefabInstance: {fileID: 652923795}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1106013500
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1106013502}
+  - component: {fileID: 1106013501}
+  m_Layer: 0
+  m_Name: AutoSaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1106013501
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1106013500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa6cc51a6427c470b88f777918bd3b4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.AutoSaveManager
+  autoSaveInterval: 60
+  showDebugLogs: 1
+--- !u!4 &1106013502
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1106013500}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1112058233 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3758831290525234046, guid: 9c2ad7873d68bd840af7da0e50b10311, type: 3}
@@ -22697,6 +22784,8 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 330585546}
   - {fileID: 2073478378}
+  - {fileID: 546400042}
+  - {fileID: 1106013502}
   - {fileID: 1016108948}
   - {fileID: 1077191678}
   - {fileID: 1582115383}
