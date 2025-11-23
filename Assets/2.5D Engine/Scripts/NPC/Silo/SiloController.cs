@@ -180,17 +180,18 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
     // --- SAVE SYSTEM INTEGRATION ---
     // Bu bölüm ISaveable arayüzü gerekliliklerini yerine getirir.
     
+  // ... (Kodun üst kısımları aynı) ...
+
+    // --- SAVE SYSTEM ENTEGRASYONU (GÜNCELLENDİ) ---
+    
     public object CaptureState()
     {
-        // Kayıt anında mevcut envanter verisini paketle
         SiloSaveData data = new SiloSaveData();
-
         foreach (var pair in siloInventory)
         {
             if (pair.Key != null)
             {
                 SiloSaveData.InventoryEntry entry = new SiloSaveData.InventoryEntry();
-                // ScriptableObject'i adı ile kaydet
                 entry.resourceID = pair.Key.name; 
                 entry.amount = pair.Value;
                 data.inventory.Add(entry);
@@ -201,30 +202,28 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
 
     public void RestoreState(object state)
     {
-        // Gelen veriyi 'SiloSaveData' olarak okumaya çalış
-        SiloSaveData data = state as SiloSaveData;
-        if (data == null) return;
-
-        // Envanteri sıfırla (Eski verilerin üzerine yazmamak için)
-        siloInventory.Clear();
-
-        foreach (var entry in data.inventory)
-        {
-            // ResourceData'yı ismiyle Resources klasöründen bulup geri yükle
-            // DİKKAT: ResourceData scriptable object'lerin "Resources" klasörü içinde olmalı.
-            ResourceData res = Resources.Load<ResourceData>(entry.resourceID);
-            
-            if (res != null)
-            {
-                siloInventory.Add(res, entry.amount);
-            }
-            else
-            {
-                Debug.LogWarning($"Silo Load: '{entry.resourceID}' isimli ResourceData bulunamadı! Dosyanın 'Resources' klasöründe olduğundan emin olun.");
-            }
-        }
+        // 1. String'e çevir (JSON)
+        string jsonString = state as string;
         
-        // Inspector'daki listeyi de güncelle
-        UpdateInventoryDisplay(); 
+        if (!string.IsNullOrEmpty(jsonString))
+        {
+            // 2. JSON'dan Class'a çevir
+            SiloSaveData data = JsonUtility.FromJson<SiloSaveData>(jsonString);
+            
+            if (data == null) return;
+
+            siloInventory.Clear();
+
+            foreach (var entry in data.inventory)
+            {
+                // Resources'dan yükle
+                ResourceData res = Resources.Load<ResourceData>(entry.resourceID);
+                if (res != null)
+                {
+                    siloInventory.Add(res, entry.amount);
+                }
+            }
+            UpdateInventoryDisplay(); 
+        }
     }
 }

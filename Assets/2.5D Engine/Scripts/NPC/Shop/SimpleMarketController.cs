@@ -2,9 +2,13 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq; 
+using IndianOceanAssets.Engine2_5D;
 
-public class SimpleMarketController : MonoBehaviour
+public class SimpleMarketController : MonoBehaviour, ISaveable
 {
+    // ... (Değişkenler ve Start/Update kısımları AYNI, dokunmanıza gerek yok) ...
+    // Kod kalabalığı olmasın diye üst kısımları atlıyorum, sadece değişen yeri yazıyorum:
+    
     [Header("--- VERİ KAYNAĞI (Data Source) ---")]
     [SerializeField] private SimpleMarketData marketData; 
 
@@ -30,13 +34,8 @@ public class SimpleMarketController : MonoBehaviour
 
     private IEnumerator Start()
     {
-        // 1. Pooler'ı bekle
         yield return new WaitUntil(() => NpcPooler.Instance != null);
-        
-        // 2. Kurulumları yap
         InitializeMarket();
-
-        // 3. EconomyManager beklemeden direkt başla
         StartMarketLoop();
     }
 
@@ -57,13 +56,10 @@ public class SimpleMarketController : MonoBehaviour
     private void InitializeMarket()
     {
         if (marketData == null || queueSpots == null || queueSpots.Length == 0) return;
-
         possibleRequests = marketData.GetSellableResources();
-        
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
             CustomerPooler.Instance.RegisterPool(marketData.customerPrefab, queueSpots.Length + 2);
-
         if (NpcPooler.Instance != null && marketData.workerPrefab != null)
             NpcPooler.Instance.CreatePool(marketData.workerPoolTag, marketData.workerPrefab.gameObject, 1);
     }
@@ -87,7 +83,7 @@ public class SimpleMarketController : MonoBehaviour
         }
     }
     
-    #region Core Logic (Unchanged)
+    // ... (Core Logic metotları: TrySpawnCustomer, ShiftQueue vb. AYNI KALACAK) ...
     private void TrySpawnCustomer() {
         int lastIndex = queueSpots.Length - 1;
         if (currentCustomers[lastIndex] == null) SpawnCustomerAtSlot(lastIndex);
@@ -168,5 +164,33 @@ public class SimpleMarketController : MonoBehaviour
             Debug.Log($"KAZANÇ: {quantity}x {soldItem.resourceName} -> {totalEarned}");
         }
     }
-    #endregion
+
+    // --- SAVE SYSTEM ENTEGRASYONU (GÜNCELLENDİ) ---
+    
+    public object CaptureState()
+    {
+        // Kasa bilgisini paketle
+        return new MarketSaveData
+        {
+            savedWalletAmount = this.accumulatedCurrency
+        };
+    }
+
+    public void RestoreState(object state)
+    {
+        // SaveManager artık string (JSON) gönderiyor. Önce string'e çeviriyoruz.
+        string jsonString = state as string;
+        
+        if (!string.IsNullOrEmpty(jsonString))
+        {
+            // JSON'u MarketSaveData'ya çevir
+            MarketSaveData data = JsonUtility.FromJson<MarketSaveData>(jsonString);
+            
+            if (data != null)
+            {
+                this.accumulatedCurrency = data.savedWalletAmount;
+                Debug.Log($"Market Kasası Yüklendi: {accumulatedCurrency}");
+            }
+        }
+    }
 }

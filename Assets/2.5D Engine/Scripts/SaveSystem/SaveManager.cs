@@ -10,54 +10,53 @@ namespace IndianOceanAssets.Engine2_5D
         public static SaveManager Instance { get; private set; }
         private string saveFilePath;
 
+        // Verileri paketlemek için kullanılan iç sınıf
+        [System.Serializable]
+        private class SaveDataCollection
+        {
+            public List<string> ids = new List<string>();
+            public List<string> jsonDatas = new List<string>();
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
-            
-            // Dosya yolu: Cihazın kalıcı veri yolu / savegame.json
             saveFilePath = Path.Combine(Application.persistentDataPath, "savegame.json");
         }
 
         private void Start()
         {
-            // Oyun başladığında otomatik yükle (İsteğe bağlı)
             LoadGame();
         }
 
-        [ContextMenu("Save Game")] // Editörde sağ tıkla test etmek için
+        [ContextMenu("Save Game")]
         public void SaveGame()
         {
             // 1. Sahnedeki tüm kaydedilebilir objeleri bul
             var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
-            
-            // 2. Verileri topla (Dictionary: "Silo_1" -> Data)
-            Dictionary<string, object> state = new Dictionary<string, object>();
+            SaveDataCollection collection = new SaveDataCollection();
 
             foreach (var saveable in saveables)
             {
-                // Her objenin benzersiz bir ID'si olmalı. Şimdilik ismini kullanıyoruz.
-                string id = (saveable as MonoBehaviour).name; 
-                state[id] = saveable.CaptureState();
+                MonoBehaviour mb = saveable as MonoBehaviour;
+                // Her objenin benzersiz bir ID'si olmalı (İsimleri ID olarak kullanıyoruz)
+                // Dikkat: Sahnede aynı isimde iki obje olmamalı (Örn: Market_1, Market_2 yapın).
+                string id = mb.name; 
+                
+                // Objeden veriyi al ve JSON string'e çevir
+                object dataObject = saveable.CaptureState();
+                string json = JsonUtility.ToJson(dataObject);
+
+                collection.ids.Add(id);
+                collection.jsonDatas.Add(json);
             }
 
-            // 3. Dosyaya yaz (JSON)
-            // Not: Dictionary'i JSON yapmak için basit bir wrapper kullanabiliriz
-            // veya her objeyi ayrı ayrı satır satır yazabiliriz.
-            // Basitlik için şimdilik Silo'ya özel manuel bir yapı kullanıyoruz:
+            // 2. Dosyaya yaz
+            string fileJson = JsonUtility.ToJson(collection, true);
+            File.WriteAllText(saveFilePath, fileJson);
             
-            // Gelişmiş bir JSON kütüphanesi (Newtonsoft) kullanmadığımız için,
-            // şimdilik sadece Silo verisini tekil olarak kaydedelim.
-            // İleride burayı tüm objeler için genelleyeceğiz.
-            
-            // SADECE SILO TESTİ İÇİN:
-            SiloController silo = FindObjectOfType<SiloController>();
-            if (silo != null)
-            {
-                string json = JsonUtility.ToJson(silo.CaptureState(), true);
-                File.WriteAllText(saveFilePath, json);
-                Debug.Log($"Oyun Kaydedildi: {saveFilePath}");
-            }
+            Debug.Log($"Oyun Kaydedildi! ({collection.ids.Count} obje)");
         }
 
         [ContextMenu("Load Game")]
@@ -65,21 +64,37 @@ namespace IndianOceanAssets.Engine2_5D
         {
             if (!File.Exists(saveFilePath))
             {
-                Debug.Log("Kayıt dosyası bulunamadı.");
+                Debug.Log("Kayıt dosyası yok. Yeni oyun.");
                 return;
             }
 
-            string json = File.ReadAllText(saveFilePath);
-            
-            // SADECE SILO TESTİ İÇİN:
-            SiloController silo = FindObjectOfType<SiloController>();
-            if (silo != null)
+            // 1. Dosyayı oku
+            string fileJson = File.ReadAllText(saveFilePath);
+            SaveDataCollection collection = JsonUtility.FromJson<SaveDataCollection>(fileJson);
+
+            if (collection == null) return;
+
+            // 2. Sözlüğe çevir (Hızlı erişim için)
+            Dictionary<string, string> saveMap = new Dictionary<string, string>();
+            for (int i = 0; i < collection.ids.Count; i++)
             {
-                // JSON'ı SiloSaveData sınıfına çevir
-                SiloSaveData data = JsonUtility.FromJson<SiloSaveData>(json);
-                silo.RestoreState(data);
-                Debug.Log("Oyun Yüklendi!");
+                if(i < collection.jsonDatas.Count)
+                    saveMap[collection.ids[i]] = collection.jsonDatas[i];
             }
+
+            // 3. Sahnedeki objelere dağıt
+            var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
+            foreach (var saveable in saveables)
+            {
+                string id = (saveable as MonoBehaviour).name;
+                if (saveMap.ContainsKey(id))
+                {
+                    // JSON string'i olduğu gibi objeye gönder, o kendi açsın
+                    saveable.RestoreState(saveMap[id]);
+                }
+            }
+            
+            Debug.Log("Oyun Yüklendi!");
         }
     }
 }
