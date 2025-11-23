@@ -8,7 +8,6 @@ namespace IndianOceanAssets.Engine2_5D
     {
         public static GameManager Instance { get; private set; }
 
-        // --- YENİ: EDİTÖR DOSTU SAHNE SEÇİMİ ---
 #if UNITY_EDITOR
         [Header("Sahne Ayarları")]
         [Tooltip("Köy sahnesini (.unity dosyası) buraya sürükleyin.")]
@@ -16,8 +15,7 @@ namespace IndianOceanAssets.Engine2_5D
 #endif
 
         [Tooltip("Otomatik dolar. Elle yazmanıza gerek yok.")]
-        [SerializeField] private string villageSceneName; // Inspector'da görünür ama private
-        // ---------------------------------------
+        [SerializeField] private string villageSceneName; 
 
         public LevelData PendingLevelData { get; private set; }
 
@@ -34,7 +32,6 @@ namespace IndianOceanAssets.Engine2_5D
             }
         }
 
-        // --- OTOMATİK İSİM GÜNCELLEME ---
         private void OnValidate()
         {
 #if UNITY_EDITOR
@@ -50,6 +47,8 @@ namespace IndianOceanAssets.Engine2_5D
 #endif
         }
 
+        // --- SAHNE YÜKLEME METOTLARI ---
+
         public void LoadLevel(LevelData data)
         {
             if (data == null)
@@ -59,21 +58,47 @@ namespace IndianOceanAssets.Engine2_5D
             }
 
             PendingLevelData = data;
+            
+            // --- YENİ: SAHNEYE GİTMEDEN ÖNCE KAYDET ---
+            TriggerSceneTransitionSave($"Bölüm Başlangıcı: {data.sceneName}");
+            // -------------------------------------------
+
             Debug.Log($"GameManager: {data.sceneName} sahnesi yükleniyor...");
             SceneManager.LoadScene(data.sceneName);
         }
 
-        // --- GÜNCELLENMİŞ DÖNÜŞ METODU ---
         public void ReturnToVillage()
         {
             if (string.IsNullOrEmpty(villageSceneName))
             {
-                Debug.LogError("GameManager: Köy sahnesi atanmamış! Lütfen Inspector'dan 'Village Scene Asset'i atayın.");
+                Debug.LogError("GameManager: Köy sahnesi atanmamış!");
                 return;
             }
 
+            // --- YENİ: KÖYE DÖNMEDEN ÖNCE KAYDET ---
+            TriggerSceneTransitionSave("Köye Dönüş");
+            // ---------------------------------------
+
             Debug.Log("Savaş bitti, köye dönülüyor...");
             SceneManager.LoadScene(villageSceneName);
+        }
+
+        // --- YARDIMCI METOT ---
+        private void TriggerSceneTransitionSave(string context)
+        {
+            // Sahnede bir AutoSaveManager var mı diye bak
+            AutoSaveManager autoSave = FindObjectOfType<AutoSaveManager>();
+            if (autoSave != null)
+            {
+                // Varsa, akıllı sistem üzerinden kaydet (Loglama vb. için)
+                autoSave.TriggerAutoSave(context);
+            }
+            else if (SaveManager.Instance != null)
+            {
+                // Yoksa, direkt SaveManager'ı kullan (Yedek plan)
+                Debug.Log($"[GameManager] Sahne geçişi kaydı başlatılıyor: {context}");
+                _ = SaveManager.Instance.SaveGameAsync();
+            }
         }
     }
 }

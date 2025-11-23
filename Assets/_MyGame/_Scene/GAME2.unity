@@ -13793,7 +13793,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa6cc51a6427c470b88f777918bd3b4f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.AutoSaveManager
-  autoSaveInterval: 20
+  autoSaveInterval: 60
   showDebugLogs: 1
 --- !u!4 &995434125
 Transform:
