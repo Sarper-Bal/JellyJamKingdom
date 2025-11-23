@@ -1,3 +1,10 @@
+/*
+ * SAVE MANAGER - v4.0 (Developer Tools Eklendi)
+ * DEĞİŞİKLİKLER:
+ * - [ContextMenu("Delete Save Data")] özelliği eklendi.
+ * - Artık Editör üzerinden sağ tıklayarak kayıt dosyasını silebilirsin.
+ */
+
 using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
@@ -33,7 +40,6 @@ namespace IndianOceanAssets.Engine2_5D
             }
             
             Instance = this;
-            // Not: DontDestroyOnLoad kullanmadığımız senaryo (Her sahnede prefab var)
             
             string basePath = Path.Combine(Application.persistentDataPath, "savegame");
             saveFilePath = basePath + ".json";
@@ -46,6 +52,33 @@ namespace IndianOceanAssets.Engine2_5D
             LoadGame();
         }
 
+        // --- DEVELOPER TOOLS (GELİŞTİRİCİ ARAÇLARI) ---
+
+        [ContextMenu("Delete Save Data (Reset)")] // <-- YENİ ÖZELLİK
+        public void DeleteSaveData()
+        {
+            // 1. Dosyaları Sil
+            try
+            {
+                if (File.Exists(saveFilePath)) File.Delete(saveFilePath);
+                if (File.Exists(tempFilePath)) File.Delete(tempFilePath);
+                if (File.Exists(backupFilePath)) File.Delete(backupFilePath);
+                
+                Debug.LogWarning("<color=red>TÜM KAYIT DOSYALARI SİLİNDİ!</color> Oyun sıfırlandı.");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Dosya silinirken hata oluştu: {e.Message}");
+            }
+
+            // 2. Sahneyi Yenile (Opsiyonel ama önerilir)
+            // Veriler silindiğinde oyunun saçmalamaması için sahneyi yeniden başlatmak en temizidir.
+            // Ancak şimdilik sadece log verelim, manuel yeniden başlatırsın.
+            Debug.Log("NOT: Değişikliklerin geçerli olması için oyunu durdurup tekrar başlatın.");
+        }
+
+        // ----------------------------------------------
+
         [ContextMenu("Save Game")]
         public void SaveGameTrigger() => _ = SaveGameAsync();
 
@@ -54,7 +87,6 @@ namespace IndianOceanAssets.Engine2_5D
             if (isSaving) return;
             isSaving = true;
 
-            // --- ADIM 1: MEVCUT SAHNEDEKİ VERİLERİ TOPLA ---
             Dictionary<string, string> currentSceneData = new Dictionary<string, string>();
             var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
 
@@ -66,17 +98,14 @@ namespace IndianOceanAssets.Engine2_5D
                 SaveableEntity idComponent = mb.GetComponent<SaveableEntity>();
                 if (idComponent != null)
                 {
-                    // Bu sahnedeki güncel veriyi al
                     currentSceneData[idComponent.ID] = JsonUtility.ToJson(saveable.CaptureState());
                 }
             }
 
-            // --- ADIM 2: ESKİ DOSYAYI OKU VE BİRLEŞTİR (ARKA PLAN) ---
             await Task.Run(() => 
             {
                 try
                 {
-                    // A. Eski verileri yükle (Varsa)
                     Dictionary<string, string> finalDataMap = new Dictionary<string, string>();
 
                     if (File.Exists(saveFilePath))
@@ -96,22 +125,17 @@ namespace IndianOceanAssets.Engine2_5D
                         }
                     }
 
-                    // B. Yeni sahne verilerini eskilerin üzerine yaz (Merge/Update)
                     foreach (var kvp in currentSceneData)
                     {
-                        // Varsa günceller, yoksa yeni ekler.
-                        // Silo bu sahnede yoksa, 'finalDataMap' içindeki eski Silo verisi korunur.
                         finalDataMap[kvp.Key] = kvp.Value;
                     }
 
-                    // C. Tekrar Listeye çevir (JSON için)
                     SaveDataCollection finalCollection = new SaveDataCollection();
                     finalCollection.ids = finalDataMap.Keys.ToList();
                     finalCollection.jsonDatas = finalDataMap.Values.ToList();
 
                     string jsonContent = JsonUtility.ToJson(finalCollection, true);
 
-                    // D. Dosyaya Yaz (Atomik)
                     File.WriteAllText(tempFilePath, jsonContent);
                     if (File.Exists(saveFilePath)) File.Copy(saveFilePath, backupFilePath, true);
                     File.Copy(tempFilePath, saveFilePath, true);
@@ -130,6 +154,7 @@ namespace IndianOceanAssets.Engine2_5D
         {
             if (LoadFile(saveFilePath)) { Debug.Log("Veriler Yüklendi."); return; }
             if (LoadFile(backupFilePath)) { Debug.LogWarning("Yedek Yüklendi."); }
+            else { Debug.Log("Kayıt yok, yeni oyun."); }
         }
 
         private bool LoadFile(string path)
