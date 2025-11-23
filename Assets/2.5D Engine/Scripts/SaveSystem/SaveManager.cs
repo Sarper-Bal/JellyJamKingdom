@@ -10,7 +10,6 @@ namespace IndianOceanAssets.Engine2_5D
         public static SaveManager Instance { get; private set; }
         private string saveFilePath;
 
-        // Verileri paketlemek için kullanılan iç sınıf
         [System.Serializable]
         private class SaveDataCollection
         {
@@ -33,18 +32,25 @@ namespace IndianOceanAssets.Engine2_5D
         [ContextMenu("Save Game")]
         public void SaveGame()
         {
-            // 1. Sahnedeki tüm kaydedilebilir objeleri bul
+            // 1. Sahnede hem ISaveable olan hem de SaveableEntity taşıyanları bul
             var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
             SaveDataCollection collection = new SaveDataCollection();
 
             foreach (var saveable in saveables)
             {
                 MonoBehaviour mb = saveable as MonoBehaviour;
-                // Her objenin benzersiz bir ID'si olmalı (İsimleri ID olarak kullanıyoruz)
-                // Dikkat: Sahnede aynı isimde iki obje olmamalı (Örn: Market_1, Market_2 yapın).
-                string id = mb.name; 
+                // --- KRİTİK DEĞİŞİKLİK: ID SİSTEMİ ---
+                SaveableEntity idComponent = mb.GetComponent<SaveableEntity>();
                 
-                // Objeden veriyi al ve JSON string'e çevir
+                if (idComponent == null)
+                {
+                    Debug.LogWarning($"SaveManager: '{mb.name}' objesinde ISaveable var ama 'SaveableEntity' EKSİK! Kaydedilmedi.");
+                    continue;
+                }
+
+                string id = idComponent.ID; // Artık isim değil, Unique ID kullanıyoruz.
+                // -------------------------------------
+                
                 object dataObject = saveable.CaptureState();
                 string json = JsonUtility.ToJson(dataObject);
 
@@ -52,11 +58,10 @@ namespace IndianOceanAssets.Engine2_5D
                 collection.jsonDatas.Add(json);
             }
 
-            // 2. Dosyaya yaz
             string fileJson = JsonUtility.ToJson(collection, true);
             File.WriteAllText(saveFilePath, fileJson);
             
-            Debug.Log($"Oyun Kaydedildi! ({collection.ids.Count} obje)");
+            Debug.Log($"Oyun Kaydedildi! ({collection.ids.Count} obje ID ile koruma altında)");
         }
 
         [ContextMenu("Load Game")]
@@ -68,13 +73,12 @@ namespace IndianOceanAssets.Engine2_5D
                 return;
             }
 
-            // 1. Dosyayı oku
             string fileJson = File.ReadAllText(saveFilePath);
             SaveDataCollection collection = JsonUtility.FromJson<SaveDataCollection>(fileJson);
 
             if (collection == null) return;
 
-            // 2. Sözlüğe çevir (Hızlı erişim için)
+            // ID -> Data sözlüğünü oluştur
             Dictionary<string, string> saveMap = new Dictionary<string, string>();
             for (int i = 0; i < collection.ids.Count; i++)
             {
@@ -82,19 +86,23 @@ namespace IndianOceanAssets.Engine2_5D
                     saveMap[collection.ids[i]] = collection.jsonDatas[i];
             }
 
-            // 3. Sahnedeki objelere dağıt
+            // Sahneyi tara ve ID'leri eşleştir
             var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
             foreach (var saveable in saveables)
             {
-                string id = (saveable as MonoBehaviour).name;
-                if (saveMap.ContainsKey(id))
+                MonoBehaviour mb = saveable as MonoBehaviour;
+                // --- KRİTİK DEĞİŞİKLİK: ID KONTROLÜ ---
+                SaveableEntity idComponent = mb.GetComponent<SaveableEntity>();
+
+                if (idComponent != null && saveMap.ContainsKey(idComponent.ID))
                 {
-                    // JSON string'i olduğu gibi objeye gönder, o kendi açsın
-                    saveable.RestoreState(saveMap[id]);
+                    // ID eşleşti, veriyi yükle
+                    saveable.RestoreState(saveMap[idComponent.ID]);
                 }
+                // ---------------------------------------
             }
             
-            Debug.Log("Oyun Yüklendi!");
+            Debug.Log("Oyun Yüklendi (ID Sistemine Göre)!");
         }
     }
 }
