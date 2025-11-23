@@ -7526,6 +7526,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.AutoUpgradeSystem
   potentialUpgrades:
+  - {fileID: 11400000, guid: 72905c2022765429fb8c24849a61b5c9, type: 2}
   - {fileID: 11400000, guid: b43799fe7b87645c9988b424afad09db, type: 2}
   roundManager: {fileID: 1582115382}
 --- !u!4 &637269857
