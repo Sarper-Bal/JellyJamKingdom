@@ -17,4 +17,7 @@ MonoBehaviour:
   heroStats: {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
   towerStats:
   - {fileID: 11400000, guid: bdba7821530fe4c13a508a31d0118674, type: 2}
+  availableUpgrades:
+  - {fileID: 11400000, guid: b43799fe7b87645c9988b424afad09db, type: 2}
+  - {fileID: 11400000, guid: 72905c2022765429fb8c24849a61b5c9, type: 2}
   levelWaves: {fileID: 11400000, guid: df7ce53750a7a4a6d84ad5c18f308f51, type: 2}

@@ -24,6 +24,10 @@ namespace IndianOceanAssets.Engine2_5D
         [Header("Kule Verileri")]
         public List<PlayerStatsData> towerStats; 
 
+        [Header("Bölüm Ödülleri")]
+        [Tooltip("Bu bölümde çıkabilecek Upgrade Kartlarını buraya ekle.")]
+        public List<UpgradeData> availableUpgrades;
+
         [Header("Düşman Dalgası")]
         public WaveSequence levelWaves; 
 
