@@ -2,7 +2,8 @@ using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System; // Exception yakalamak için gerekli
+using System;
+using System.Threading.Tasks; // <-- ASYNC GÖREVLER İÇİN GEREKLİ
 
 namespace IndianOceanAssets.Engine2_5D
 {
@@ -10,10 +11,12 @@ namespace IndianOceanAssets.Engine2_5D
     {
         public static SaveManager Instance { get; private set; }
         
-        // Dosya Yolları
         private string saveFilePath;
-        private string tempFilePath;   // Geçici dosya (Yazma sırasındaki risk alanı)
-        private string backupFilePath; // Yedek dosya (Eskisi bozulursa cankurtaran)
+        private string tempFilePath;
+        private string backupFilePath;
+        
+        // Aynı anda iki kayıt işleminin çakışmasını önlemek için kilit
+        private bool isSaving = false; 
 
         [System.Serializable]
         private class SaveDataCollection
@@ -27,11 +30,10 @@ namespace IndianOceanAssets.Engine2_5D
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             
-            // Dosya yollarını belirle
             string basePath = Path.Combine(Application.persistentDataPath, "savegame");
             saveFilePath = basePath + ".json";
-            tempFilePath = basePath + ".tmp"; // .tmp uzantılı geçici dosya
-            backupFilePath = basePath + ".bak"; // .bak uzantılı yedek dosya
+            tempFilePath = basePath + ".tmp";
+            backupFilePath = basePath + ".bak";
         }
 
         private void Start()
@@ -39,82 +41,94 @@ namespace IndianOceanAssets.Engine2_5D
             LoadGame();
         }
 
+        // ContextMenu asenkron metotları desteklemez, bu yüzden bir wrapper kullanıyoruz
         [ContextMenu("Save Game")]
-        public void SaveGame()
+        public void SaveGameTrigger()
         {
-            // 1. Verileri Topla (Hafızada)
-            var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
+            _ = SaveGameAsync(); // "Fire and Forget" (Başlat ve unut)
+        }
+
+        public async Task SaveGameAsync()
+        {
+            if (isSaving)
+            {
+                Debug.LogWarning("Zaten kayıt işlemi devam ediyor...");
+                return;
+            }
+
+            isSaving = true;
+            
+            // ADIM 1: VERİ TOPLAMA (MAIN THREAD)
+            // Unity objelerine (Transform, GameObject) sadece ana iş parçacığından erişilebilir.
+            // Bu yüzden veriyi burada hızlıca topluyoruz.
             SaveDataCollection collection = new SaveDataCollection();
+            var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
 
             foreach (var saveable in saveables)
             {
                 MonoBehaviour mb = saveable as MonoBehaviour;
                 SaveableEntity idComponent = mb.GetComponent<SaveableEntity>();
                 
-                if (idComponent == null)
+                if (idComponent != null)
                 {
-                    Debug.LogWarning($"SaveManager: '{mb.name}' üzerinde SaveableEntity yok, atlanıyor.");
-                    continue;
+                    collection.ids.Add(idComponent.ID);
+                    // Veriyi nesne (Object) olarak alıyoruz
+                    collection.jsonDatas.Add(JsonUtility.ToJson(saveable.CaptureState()));
                 }
-
-                collection.ids.Add(idComponent.ID);
-                collection.jsonDatas.Add(JsonUtility.ToJson(saveable.CaptureState()));
             }
 
-            // JSON'a çevir
+            // Veriyi tek bir büyük JSON metnine çevir (Bu işlem hızlıdır ama veri büyükse biraz sürebilir)
             string jsonContent = JsonUtility.ToJson(collection, true);
 
-            // 2. GÜVENLİ KAYIT İŞLEMİ (ATOMIC SAVE)
-            try
+            // ADIM 2: DOSYAYA YAZMA (BACKGROUND THREAD)
+            // İşte SİHİR burada! Diske yazma işlemi arka plana atılıyor.
+            // Oyun bu sırada donmaz.
+            await Task.Run(() => 
             {
-                // A. Önce geçici dosyaya yaz (Eğer burada hata olursa asıl dosya zarar görmez)
-                File.WriteAllText(tempFilePath, jsonContent);
-                
-                // B. Asıl dosya varsa, onu yedeğe çek (.bak)
-                if (File.Exists(saveFilePath))
+                try
                 {
-                    File.Copy(saveFilePath, backupFilePath, true);
+                    // Atomik Kayıt İşlemleri (Ağır İşler)
+                    File.WriteAllText(tempFilePath, jsonContent);
+                    
+                    if (File.Exists(saveFilePath))
+                        File.Copy(saveFilePath, backupFilePath, true);
+
+                    File.Copy(tempFilePath, saveFilePath, true);
+                    File.Delete(tempFilePath);
                 }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Arka plan kayıt hatası: {e.Message}");
+                }
+            });
 
-                // C. Geçici dosyayı asıl dosyanın yerine taşı (Bu işlem milisaniyeler sürer, risk çok azdır)
-                File.Copy(tempFilePath, saveFilePath, true);
-                
-                // D. Geçici dosyayı temizle
-                File.Delete(tempFilePath);
-
-                Debug.Log("Oyun GÜVENLİ Şekilde Kaydedildi!");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Kayıt sırasında kritik hata oluştu! Veriler korunuyor. Hata: {e.Message}");
-                // Hata olsa bile eski saveFilePath hala duruyor, veri kaybı yok.
-            }
+            isSaving = false;
+            Debug.Log("Oyun Asenkron Olarak Kaydedildi! (Takılma yok)");
         }
 
         [ContextMenu("Load Game")]
         public void LoadGame()
         {
-            // Önce normal dosyayı yüklemeyi dene
+            // Yükleme işlemi genelde oyun başında bir kez yapılır ve "Loading Screen" olur.
+            // Bu yüzden Yükleme'nin senkron (bloklayıcı) olması kabul edilebilir.
+            // Ancak istersen bunu da async yapabiliriz. Şimdilik güvenli senkron bırakıyorum.
+            
             if (LoadFile(saveFilePath))
             {
                 Debug.Log("Oyun Yüklendi.");
                 return;
             }
             
-            // Eğer normal dosya bozuksa veya yoksa, yedeği dene
-            Debug.LogWarning("Asıl kayıt dosyası yüklenemedi veya yok. Yedek (.bak) kontrol ediliyor...");
-            
             if (LoadFile(backupFilePath))
             {
-                Debug.LogWarning("Oyun YEDEK dosyasından kurtarıldı!");
+                Debug.LogWarning("Yedek dosya yüklendi.");
             }
             else
             {
-                Debug.Log("Kayıt dosyası bulunamadı. Yeni oyun başlatılıyor.");
+                Debug.Log("Kayıt bulunamadı. Yeni oyun.");
             }
         }
 
-        // Yardımcı Yükleme Fonksiyonu
         private bool LoadFile(string path)
         {
             if (!File.Exists(path)) return false;
@@ -122,14 +136,11 @@ namespace IndianOceanAssets.Engine2_5D
             try
             {
                 string fileJson = File.ReadAllText(path);
-                
-                // Veri bütünlüğünü kontrol et (Boş veya bozuk mu?)
                 if (string.IsNullOrEmpty(fileJson)) return false;
 
                 SaveDataCollection collection = JsonUtility.FromJson<SaveDataCollection>(fileJson);
                 if (collection == null) return false;
 
-                // Dağıtım Sözlüğü
                 Dictionary<string, string> saveMap = new Dictionary<string, string>();
                 for (int i = 0; i < collection.ids.Count; i++)
                 {
@@ -137,7 +148,6 @@ namespace IndianOceanAssets.Engine2_5D
                         saveMap[collection.ids[i]] = collection.jsonDatas[i];
                 }
 
-                // Sahnedeki objelere dağıt
                 var saveables = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();
                 foreach (var saveable in saveables)
                 {
@@ -149,13 +159,12 @@ namespace IndianOceanAssets.Engine2_5D
                         saveable.RestoreState(saveMap[idComponent.ID]);
                     }
                 }
-                
-                return true; // Başarılı
+                return true;
             }
             catch (Exception e)
             {
-                Debug.LogError($"Dosya yüklenirken hata: {path}\n{e.Message}");
-                return false; // Yükleme başarısız
+                Debug.LogError($"Yükleme hatası: {path}\n{e.Message}");
+                return false;
             }
         }
     }
