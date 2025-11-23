@@ -16,6 +16,6 @@ MonoBehaviour:
   description: 
   icon: {fileID: 0}
   bonuses:
-  - statType: 8
+  - statType: 0
     value: 50
     modType: 0
