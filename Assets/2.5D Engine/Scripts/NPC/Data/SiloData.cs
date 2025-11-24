@@ -1,30 +1,35 @@
-/*
- * SILO VERİSİ (SCRIPTABLE OBJECT)
- * GÖREVİ:
- * Silo binasına özel verileri tutar.
- * Başlangıçta 'NpcHousingData' ile aynı yapıdadır, ancak ayrıştırılmıştır.
- * İleride 'MaxStorageCapacity' gibi Silo'ya özel statlar buraya eklenebilir.
- */
-
 using UnityEngine;
+using System.Collections.Generic;
 
-[CreateAssetMenu(fileName = "NewSiloData", menuName = "Stats/Silo Data")]
-public class SiloData : ScriptableObject
+namespace IndianOceanAssets.Engine2_5D
 {
-    [Header("Spawn Ayarları")]
-    [Tooltip("Silo'dan spawn edilecek taşıyıcı NPC prefab'ı.")]
-    public GameObject genericNpcPrefab;
-    
-    [Tooltip("Spawn edilecek NPC'lerin kullanacağı stat verisi (Hız vb.).")]
-    public FriendlyNpcData npcDataToSpawn;
+    [CreateAssetMenu(fileName = "NewSiloData", menuName = "Engine 2.5D/NPC/Silo Data")]
+    public class SiloData : ScriptableObject
+    {
+        // --- GÖRSELLİK VE UPGRADE ---
+        [Header("Görsellik & Seviye")]
+        [Tooltip("Silonun oyun içindeki adı (Örn: 'Taş Deposu Sv.1').")]
+        public string buildingName;
 
-    [Tooltip("Silo'da çalışan toplam taşıyıcı NPC sayısı.")]
-    public int populationCount = 5;
+        [Tooltip("Bu seviyedeki silonun görünümü.")]
+        public Sprite buildingSprite;
 
-    [Tooltip("NPC'lerin teker teker çıkması için aradaki saniye farkı.")]
-    public float spawnInterval = 1.0f;
+        [Header("Upgrade Bağlantıları")]
+        [Tooltip("Bir sonraki seviyenin datası.")]
+        public SiloData nextLevelData;
 
-    [Header("Davranış Ayarları")]
-    [Tooltip("NPC'lerin işten döndükten sonra tekrar çıkmadan önce dinlenme süresi.")]
-    public float restDuration = 2.0f;
+        [Tooltip("Yükseltme maliyeti.")]
+        // Not: ResourceCost yapısı namespace içinde tanımlı olduğu için buradan erişebiliriz.
+        public List<ResourceCost> upgradeCosts;
+
+        // --- MEVCUT AYARLAR ---
+        [Header("İşçi Ayarları")]
+        public GameObject genericNpcPrefab;
+        public FriendlyNpcData npcDataToSpawn;
+        
+        [Tooltip("Bu silonun çalıştırabileceği maksimum işçi sayısı.")]
+        public int populationCount = 2; // Seviye arttıkça bunu artırın
+        
+        public float restDuration = 2.0f;
+    }
 }

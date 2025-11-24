@@ -1,17 +1,16 @@
 /*
- * SIMPLE MARKET CONTROLLER - v3.0 (Bağımsız / Decentralized)
- * DEĞİŞİKLİKLER:
- * - NpcPooler bağımlılığı kaldırıldı.
- * - Kendi özel işçisini (localWorker) Start'ta yaratır ve yönetir.
+ * SIMPLE MARKET CONTROLLER - TAM BAĞIMSIZ (FIXED)
+ * HATA DÜZELTMESİ:
+ * - 'NpcPooler' referansları tamamen temizlendi.
+ * - İşçi (Worker) artık yerel olarak (Instantiate) üretilip 'localWorker' değişkeninde saklanıyor.
  */
 
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq; 
-using IndianOceanAssets.Engine2_5D;
+using IndianOceanAssets.Engine2_5D; // Save System ve IResourceProvider için
 
-public class SimpleMarketController : MonoBehaviour, ISaveable
+public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvider
 {
     [Header("--- VERİ KAYNAĞI (Data Source) ---")]
     [SerializeField] private SimpleMarketData marketData; 
@@ -35,16 +34,13 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     private List<ResourceData> possibleRequests;
     private bool isRunning = false; 
     
-    // --- YEREL İŞÇİ ---
-    private FriendlyNpcAI localWorker; // Marketin tek işçisi
-    // ------------------
+    // --- YEREL İŞÇİ YÖNETİMİ ---
+    private FriendlyNpcAI localWorker; 
+    // ---------------------------
 
-    private IEnumerator Start()
+    private void Start()
     {
-        // Artık NpcPooler beklemiyoruz!
-        // Sadece CustomerPooler gerekiyorsa onu bekleyebilirsin ama şart değil.
-        yield return null; 
-        
+        // Artık NpcPooler beklemiyoruz.
         InitializeMarket();
         StartMarketLoop();
     }
@@ -71,22 +67,22 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         possibleRequests = marketData.GetSellableResources();
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         
-        // Müşteri Havuzu (CustomerPooler kalabilir, NpcPooler değil)
+        // Müşteri Havuzu (CustomerPooler hala varsa kullanılır, yoksa hata vermesin diye null check)
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
             CustomerPooler.Instance.RegisterPool(marketData.customerPrefab, queueSpots.Length + 2);
 
-        // --- YEREL İŞÇİYİ YARAT ---
-        if (marketData.workerPrefab != null)
+        // --- YEREL İŞÇİYİ OLUŞTUR ---
+        if (localWorker == null && marketData.workerPrefab != null)
         {
-            GameObject workerObj = Instantiate(marketData.workerPrefab.gameObject, 
-                                             (workerSpawnPoint != null ? workerSpawnPoint.position : transform.position), 
-                                             Quaternion.identity, 
-                                             transform); // Marketin çocuğu yap
+            Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
             
+            // İşçiyi Market'in çocuğu olarak yarat
+            GameObject workerObj = Instantiate(marketData.workerPrefab.gameObject, spawnPos, Quaternion.identity, transform);
             localWorker = workerObj.GetComponent<FriendlyNpcAI>();
+            
             if (localWorker != null)
             {
-                workerObj.SetActive(false); // Beklemede kalsın
+                workerObj.SetActive(false); // Pasif bekle
                 
                 // Eventleri bağla
                 localWorker.OnArrivedAtWork += OnWorkerArrivedAtSilo;
@@ -94,9 +90,6 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
             }
         }
     }
-
-    // --- NPC Pooler İçin Getter GEREKSİZ KALDI (Silebiliriz) ---
-    // public SimpleMarketData GetMarketData() { return marketData; }
 
     private IEnumerator SpawnRoutine()
     {
@@ -147,22 +140,22 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         if (smartWaitMode && targetSilo.GetStoredAmount(requestedRes) < 1) return; 
         StartCoroutine(DispatchWorker());
     }
-    
-    // --- GÜNCELLENMİŞ İŞÇİ GÖNDERİMİ ---
+
     private IEnumerator DispatchWorker() {
         isWorkerBusy = true;
         
-        // İşçiyi aktifleştir
+        // İşçiyi aktifleştir (Eğer pasifse)
         if (!localWorker.gameObject.activeInHierarchy)
         {
             Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
             localWorker.transform.position = spawnPos;
             localWorker.gameObject.SetActive(true);
             
-            // Reset
+            // Reset (IPooledNpc arayüzü varsa)
             if (localWorker is IPooledNpc p) p.OnNpcSpawned();
         }
 
+        // Göreve gönder
         Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform;
         localWorker.Activate(marketData.workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
         
@@ -179,7 +172,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     private void OnWorkerReturnedToShop(FriendlyNpcAI npc, int amount, ResourceData resource) {
         isWorkerBusy = false;
         
-        // İş bitince pasif yap (KeepActive kapalıysa)
+        // İş bitince pasif yap (Eğer sürekli aktif kalması istenmiyorsa)
         if (!keepWorkerActive) {
             npc.gameObject.SetActive(false);
         }
@@ -202,7 +195,25 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     }
     #endregion
 
-    // --- SAVE SYSTEM ---
+    // --- IResourceProvider IMPLEMENTATION ---
+    public int GetStoredAmount(ResourceData resource)
+    {
+        if (marketData != null && marketData.currencyResource == resource) return accumulatedCurrency;
+        return 0;
+    }
+
+    public int TakeResource(ResourceData resource, int amountToTake)
+    {
+        if (marketData != null && marketData.currencyResource == resource)
+        {
+            int actual = Mathf.Min(accumulatedCurrency, amountToTake);
+            accumulatedCurrency -= actual;
+            return actual;
+        }
+        return 0;
+    }
+
+    // --- SAVE SYSTEM INTEGRATION ---
     public object CaptureState()
     {
         return new MarketSaveData { savedWalletAmount = this.accumulatedCurrency };
