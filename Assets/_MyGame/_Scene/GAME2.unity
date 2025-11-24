@@ -11761,11 +11761,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43819b1c61450432b82cf4b8f22d5ed7, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -0.14999999
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43819b1c61450432b82cf4b8f22d5ed7, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -10
+      value: -10.022945
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43819b1c61450432b82cf4b8f22d5ed7, type: 3}
       propertyPath: m_LocalRotation.w
@@ -16611,6 +16611,10 @@ PrefabInstance:
     - target: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       propertyPath: m_Name
       value: BreathHouse
+      objectReference: {fileID: 0}
+    - target: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4588609894122845651, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       propertyPath: m_LocalScale.x
@@ -26357,15 +26361,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4e4b2ced54ca144c3a5d16d0d09f8b8f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 11.802
+      value: 11.78686
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4e4b2ced54ca144c3a5d16d0d09f8b8f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -0.00000023841858
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4e4b2ced54ca144c3a5d16d0d09f8b8f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 5.474
+      value: 5.5015545
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4e4b2ced54ca144c3a5d16d0d09f8b8f, type: 3}
       propertyPath: m_LocalRotation.w

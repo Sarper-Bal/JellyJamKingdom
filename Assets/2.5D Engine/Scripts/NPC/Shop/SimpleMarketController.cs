@@ -2,13 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq; 
-using IndianOceanAssets.Engine2_5D;
+using IndianOceanAssets.Engine2_5D; // Save System için gerekli
 
 public class SimpleMarketController : MonoBehaviour, ISaveable
 {
-    // ... (Değişkenler ve Start/Update kısımları AYNI, dokunmanıza gerek yok) ...
-    // Kod kalabalığı olmasın diye üst kısımları atlıyorum, sadece değişen yeri yazıyorum:
-    
     [Header("--- VERİ KAYNAĞI (Data Source) ---")]
     [SerializeField] private SimpleMarketData marketData; 
 
@@ -34,8 +31,19 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
 
     private IEnumerator Start()
     {
+        // 1. NpcPooler'ın hazır olmasını bekle
         yield return new WaitUntil(() => NpcPooler.Instance != null);
+        
+        // 2. Market kurulumunu yap
         InitializeMarket();
+
+        // 3. Havuz Genişletme (YENİ: Eğer market sonradan eklendiyse havuzu büyüt)
+        if (NpcPooler.Instance != null)
+        {
+            NpcPooler.Instance.RecalculateAndExpandPools();
+        }
+
+        // 4. Market döngüsünü başlat
         StartMarketLoop();
     }
 
@@ -56,13 +64,24 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     private void InitializeMarket()
     {
         if (marketData == null || queueSpots == null || queueSpots.Length == 0) return;
+
         possibleRequests = marketData.GetSellableResources();
+        
         currentCustomers = new SimpleCustomer[queueSpots.Length];
+        
+        // Müşteri havuzunu ayarla
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
             CustomerPooler.Instance.RegisterPool(marketData.customerPrefab, queueSpots.Length + 2);
-        if (NpcPooler.Instance != null && marketData.workerPrefab != null)
-            NpcPooler.Instance.CreatePool(marketData.workerPoolTag, marketData.workerPrefab.gameObject, 1);
+
+        // Not: Worker (İşçi) havuzu artık NpcPooler.Recalculate... tarafından otomatik ayarlanıyor.
     }
+
+    // --- NPC Pooler'ın Veriye Erişmesi İçin ---
+    public SimpleMarketData GetMarketData()
+    {
+        return marketData;
+    }
+    // ------------------------------------------
 
     private IEnumerator SpawnRoutine()
     {
@@ -83,7 +102,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         }
     }
     
-    // ... (Core Logic metotları: TrySpawnCustomer, ShiftQueue vb. AYNI KALACAK) ...
+    #region Core Logic
     private void TrySpawnCustomer() {
         int lastIndex = queueSpots.Length - 1;
         if (currentCustomers[lastIndex] == null) SpawnCustomerAtSlot(lastIndex);
@@ -119,10 +138,11 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
             Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
             Quaternion spawnRot = (workerSpawnPoint != null) ? workerSpawnPoint.rotation : Quaternion.identity;
             permanentWorker = NpcPooler.Instance.SpawnFromPool(marketData.workerPoolTag, spawnPos, spawnRot);
-            if (permanentWorker == null) {
-                NpcPooler.Instance.CreatePool(marketData.workerPoolTag, marketData.workerPrefab.gameObject, 1);
-                permanentWorker = NpcPooler.Instance.SpawnFromPool(marketData.workerPoolTag, spawnPos, spawnRot);
-                if (permanentWorker == null) { isWorkerBusy = false; yield break; }
+            
+            if (permanentWorker == null) { 
+                // Eğer havuzda eleman yoksa (NpcPooler hesaplayana kadar) işlemi iptal et
+                isWorkerBusy = false; 
+                yield break; 
             }
         } else {
             if (!permanentWorker.gameObject.activeInHierarchy) permanentWorker.gameObject.SetActive(true);
@@ -164,32 +184,23 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
             Debug.Log($"KAZANÇ: {quantity}x {soldItem.resourceName} -> {totalEarned}");
         }
     }
+    #endregion
 
-    // --- SAVE SYSTEM ENTEGRASYONU (GÜNCELLENDİ) ---
-    
+    // --- SAVE SYSTEM INTEGRATION ---
     public object CaptureState()
     {
-        // Kasa bilgisini paketle
-        return new MarketSaveData
-        {
-            savedWalletAmount = this.accumulatedCurrency
-        };
+        return new MarketSaveData { savedWalletAmount = this.accumulatedCurrency };
     }
 
     public void RestoreState(object state)
     {
-        // SaveManager artık string (JSON) gönderiyor. Önce string'e çeviriyoruz.
         string jsonString = state as string;
-        
         if (!string.IsNullOrEmpty(jsonString))
         {
-            // JSON'u MarketSaveData'ya çevir
             MarketSaveData data = JsonUtility.FromJson<MarketSaveData>(jsonString);
-            
             if (data != null)
             {
                 this.accumulatedCurrency = data.savedWalletAmount;
-                Debug.Log($"Market Kasası Yüklendi: {accumulatedCurrency}");
             }
         }
     }

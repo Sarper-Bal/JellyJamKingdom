@@ -31,13 +31,23 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
     
     private bool isRunning = false;
 
+  // ... (ISaveable ve değişkenler aynı) ...
+
     private void Start()
     {
         if (siloData == null) return;
 
-        // EconomyManager bagimliligi kaldirildi.
+        // --- YENİ: Havuz Genişletme Tetikleyicisi ---
+        if (NpcPooler.Instance != null)
+        {
+            NpcPooler.Instance.RecalculateAndExpandPools();
+        }
+        // --------------------------------------------
+
         StartSilo();
     }
+    
+    // ... (Geri kalan kodlar aynı) ...
 
     public void StartSilo()
     {

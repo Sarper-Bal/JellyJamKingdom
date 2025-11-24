@@ -22,14 +22,21 @@ public class NpcHousing : MonoBehaviour
     
     private bool isRunning = false;
 
+ // Start yerine OnEnable kullanırsan, Inspector'da her açıp kapattığında çalışır.
     private void Start()
     {
         if (housingData == null) return;
         
-        // EconomyManager bağımlılığı kaldırıldı. Direkt başlıyor.
+        // --- BURASI ÖNEMLİ: Pool Kontrolü ---
+        // Bina oyuna dahil olduğunda (veya aktifleştiğinde) havuza haber ver
+        if (NpcPooler.Instance != null)
+        {
+            NpcPooler.Instance.RecalculateAndExpandPools();
+        }
+        // ------------------------------------
+
         StartHousing();
     }
-
     // OnDestroy'da abonelikten çıkma işlemine gerek kalmadı.
 
     public void StartHousing()
