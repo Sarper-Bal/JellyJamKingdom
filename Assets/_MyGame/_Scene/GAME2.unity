@@ -17996,6 +17996,10 @@ PrefabInstance:
       propertyPath: housingData
       value: 
       objectReference: {fileID: 11400000, guid: 469b96e3811d74247b0dd7aa8d0842b5, type: 2}
+    - target: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: paymentSilo
+      value: 
+      objectReference: {fileID: 863620436}
     - target: {fileID: 1108996629134511513, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0
