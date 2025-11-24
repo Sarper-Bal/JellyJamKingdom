@@ -12864,6 +12864,10 @@ PrefabInstance:
       value: SimpleShop
       objectReference: {fileID: 0}
     - target: {fileID: 3491669937086893694, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
+      propertyPath: marketData
+      value: 
+      objectReference: {fileID: 11400000, guid: df96026ec94b7416db11cd0daddc9fc1, type: 2}
+    - target: {fileID: 3491669937086893694, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
       propertyPath: targetSilo
       value: 
       objectReference: {fileID: 863620436}
@@ -12887,6 +12891,18 @@ PrefabInstance:
       propertyPath: 'queueSpots.Array.data[6]'
       value: 
       objectReference: {fileID: 1273659987}
+    - target: {fileID: 3491669937086893694, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
+      propertyPath: paymentSources.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3491669937086893694, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
+      propertyPath: 'paymentSources.Array.data[0]'
+      value: 
+      objectReference: {fileID: 32754680}
+    - target: {fileID: 3491669937086893694, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
+      propertyPath: 'paymentSources.Array.data[1]'
+      value: 
+      objectReference: {fileID: 598690867}
     - target: {fileID: 3921475914705405588, guid: 7d03e9153bbb247fdae605ec7dc5b0ef, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.09

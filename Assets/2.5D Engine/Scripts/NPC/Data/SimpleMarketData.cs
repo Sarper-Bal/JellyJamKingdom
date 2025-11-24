@@ -1,33 +1,45 @@
 using UnityEngine;
 using System.Collections.Generic;
+using IndianOceanAssets.Engine2_5D; // ResourceCost ve ResourceData için
 
-// Bu satır sayesinde Project penceresinde Sağ Tık -> Create -> Economy -> Simple Market Data diyebileceksin.
 [CreateAssetMenu(fileName = "NewSimpleMarketData", menuName = "Economy/Simple Market Data")]
 public class SimpleMarketData : ScriptableObject
 {
-    [Header("--- GENEL AYARLAR (General) ---")]
+    // --- YENİ: LEVEL & UPGRADE SİSTEMİ ---
+    [Header("--- SEVİYE & UPGRADE ---")]
+    [Tooltip("Marketin bu seviyedeki adı (Örn: Pazar Yeri Sv.2)")]
+    public string buildingName;
+
+    [Tooltip("Bir sonraki seviyenin datası. Boşsa son seviyedir.")]
+    public SimpleMarketData nextLevelData;
+
+    [Tooltip("Yükseltme için gereken kaynaklar.")]
+    public List<ResourceCost> upgradeCosts;
+    // -------------------------------------
+
+    [Header("--- GENEL AYARLAR ---")]
     [Tooltip("Yeni müşteri gelme sıklığı (saniye).")]
     public float customerSpawnInterval = 2.5f;
 
-    [Header("--- EKONOMİ (Economy) ---")]
+    [Header("--- EKONOMİ ---")]
     [Tooltip("Bu market satış karşılığında ne kazanacak? (Örn: Coin)")]
     public ResourceData currencyResource;
 
     [System.Serializable]
     public struct TradeItem
     {
-        public ResourceData itemToSell; // Satılan Ürün (Örn: Stone)
-        public int pricePerUnit;        // Fiyatı (Örn: 2 Coin)
+        public ResourceData itemToSell; 
+        public int pricePerUnit;        
     }
 
     [Tooltip("Bu markette satılan ürünler ve fiyat listesi.")]
     public List<TradeItem> priceList;
 
-    [Header("--- PREFABLAR & İŞÇİ (Prefabs & Worker) ---")]
+    [Header("--- PREFABLAR & İŞÇİ ---")]
     [Tooltip("Müşteri Prefabı.")]
     public SimpleCustomer customerPrefab;
 
-    [Tooltip("İşçi Prefabı (NpcPooler'a tanıtılacak).")]
+    [Tooltip("İşçi Prefabı.")]
     public FriendlyNpcAI workerPrefab;
 
     [Tooltip("İşçinin Hız ve Taşıma verileri.")]
@@ -36,9 +48,7 @@ public class SimpleMarketData : ScriptableObject
     [Tooltip("İşçi Havuz Etiketi.")]
     public string workerPoolTag = "NPC";
 
-    /// <summary>
-    /// Marketin satabileceği ürünlerin listesini (ResourceData olarak) döndürür.
-    /// </summary>
+    // --- YARDIMCI METOTLAR ---
     public List<ResourceData> GetSellableResources()
     {
         List<ResourceData> list = new List<ResourceData>();
@@ -52,9 +62,6 @@ public class SimpleMarketData : ScriptableObject
         return list;
     }
     
-    /// <summary>
-    /// Verilen ürünün fiyatını bulur. Listede yoksa 0 döner.
-    /// </summary>
     public int GetPriceFor(ResourceData resource)
     {
         if (priceList == null) return 0;
@@ -62,6 +69,6 @@ public class SimpleMarketData : ScriptableObject
         {
             if (item.itemToSell == resource) return item.pricePerUnit;
         }
-        return 0; // Listede yoksa bedava veya satılamaz
+        return 0; 
     }
 }

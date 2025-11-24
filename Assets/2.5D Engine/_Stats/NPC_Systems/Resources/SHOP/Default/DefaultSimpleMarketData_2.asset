@@ -10,8 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3fc86d9819e65407e81a0ec0fe8500b0, type: 3}
-  m_Name: DefaultSimpleMarketData
+  m_Name: DefaultSimpleMarketData_2
   m_EditorClassIdentifier: Assembly-CSharp::SimpleMarketData
+  buildingName: 
+  nextLevelData: {fileID: 11400000, guid: c855b82a8a3a54b05bbb6fff9ba49541, type: 2}
+  upgradeCosts:
+  - resource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
+    amount: 1
+  - resource: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
+    amount: 1
   customerSpawnInterval: 2
   currencyResource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
   priceList:
