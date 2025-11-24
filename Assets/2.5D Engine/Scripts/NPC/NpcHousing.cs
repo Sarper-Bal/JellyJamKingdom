@@ -1,15 +1,7 @@
-/*
- * NPC HOUSING - FINAL (Local Pool + Upgrade + Save)
- * ÖZELLİKLER:
- * 1. Bağımsızdır (NpcPooler kullanmaz, kendi işçisini yönetir).
- * 2. Seviye atlayabilir (Görseli, işçi sayısını ve verisini değiştirir).
- * 3. Kaydedilebilir (Seviyesini ve içindeki stoğu hatırlar).
- */
-
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using IndianOceanAssets.Engine2_5D; // Namespace'leri unutma
+using IndianOceanAssets.Engine2_5D;
 
 public class NpcHousing : MonoBehaviour, ISaveable
 {
@@ -17,18 +9,16 @@ public class NpcHousing : MonoBehaviour, ISaveable
     [SerializeField] private NpcHousingData housingData;
     
     [Header("Görsel Referanslar")]
-    [Tooltip("Binanın görselinin değişmesi için SpriteRenderer referansı.")]
     [SerializeField] private SpriteRenderer buildingRenderer;
     [SerializeField] private Transform spawnPoint; 
 
     [Header("Upgrade & Ödeme")]
-    [Tooltip("Geliştirme maliyetinin tahsil edileceği Silo.")]
     [SerializeField] private SiloController paymentSilo;
 
     [Header("İş Ayarları")]
     [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource; 
-    [SerializeField] private WorkSpotInteractable resourceTarget; // Kaynak noktası
-    [SerializeField] public NpcHousing houseTarget; // Transfer için hedef ev
+    [SerializeField] private WorkSpotInteractable resourceTarget;
+    [SerializeField] public NpcHousing houseTarget;
     [SerializeField] private NpcPath optionalNpcPath; 
     
     [Header("Stok Durumu")]
@@ -38,81 +28,70 @@ public class NpcHousing : MonoBehaviour, ISaveable
     public enum NpcJobType { GatherResource, TransferResource }
     public event System.Action<FriendlyNpcAI, NpcHousing> OnNpcReadyToWork;
     
-    // --- YEREL İŞÇİ HAVUZU ---
     private List<FriendlyNpcAI> myWorkers = new List<FriendlyNpcAI>();
-    
     private bool isRunning = false;
     private bool isProducing = false;
+    
+    // --- ÇAKIŞMA ÖNLEYİCİ ---
+    private bool isDataRestored = false; // Kayıttan veri geldi mi?
 
     private void Start()
     {
-        // Eğer Data yoksa dur
+        // Eğer kayıt sistemi veriyi yüklediyse, Start'ın tekrar sıfırlamasına izin verme
+        if (isDataRestored) 
+        {
+            // Zaten yüklendi, sadece çalıştır
+            if (!isRunning) StartHousing();
+            return; 
+        }
+
         if (housingData == null) return;
         
-        // Görseli başlangıç datasına göre ayarla (Eğer kayıt yüklenmediyse)
+        // Normal başlangıç (Kayıt yoksa)
         UpdateVisuals();
-
-        // İşçileri hazırla (Eğer kayıt yüklenip işçi yaratılmadıysa)
-        if (myWorkers.Count == 0) InitializeWorkforce();
-        
-        // Binayı çalıştır
+        InitializeWorkforce();
         StartHousing();
     }
-
-    // --- BAŞLATMA & DURDURMA ---
 
     public void StartHousing()
     {
         if (isRunning) return;
         isRunning = true;
-        
-        // İşçileri sahaya sür
         StartCoroutine(DeployWorkersRoutine());
-        
-        if (housingData.requiresConversion) 
+        if (housingData != null && housingData.requiresConversion) 
             StartCoroutine(ProductionRoutine());
     }
+
+    // ... (StopHousing, InitializeWorkforce, CreateWorker, DeployWorkersRoutine, SendWorkerToTask AYNEN KALSIN) ...
+    // Kod tekrarı olmasın diye burayı atlıyorum, eski metotlarını koru.
+    // Ancak aşağıdaki RestoreState ve TryUpgrade kısımlarını mutlaka güncelle.
 
     public void StopHousing()
     {
         isRunning = false;
         StopAllCoroutines();
-        // İşçileri eve çek (Pasif yap)
-        foreach (var worker in myWorkers) 
-            if(worker != null) worker.gameObject.SetActive(false);
+        foreach (var worker in myWorkers) if(worker != null) worker.gameObject.SetActive(false);
     }
-
-    // --- İŞÇİ YÖNETİMİ (LOCAL POOL) ---
 
     private void InitializeWorkforce()
     {
         if (housingData.genericNpcPrefab == null) return;
-
-        // Eksik kadar üret (Upgrade sonrası için de çalışır)
         int currentCount = myWorkers.Count;
         int targetCount = housingData.populationCount;
-
         if (targetCount > currentCount)
         {
-            for (int i = 0; i < (targetCount - currentCount); i++)
-            {
-                CreateWorker();
-            }
+            for (int i = 0; i < (targetCount - currentCount); i++) CreateWorker();
         }
     }
 
     private FriendlyNpcAI CreateWorker()
     {
-        // İşçiyi binanın çocuğu (Child) olarak üret
         GameObject workerObj = Instantiate(housingData.genericNpcPrefab, GetSpawnPoint().position, Quaternion.identity, transform);
         FriendlyNpcAI ai = workerObj.GetComponent<FriendlyNpcAI>();
-        
         if (ai != null)
         {
             workerObj.SetActive(false);
             myWorkers.Add(ai);
-            
-            // Eventleri bağla
             ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
             ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
         }
@@ -121,19 +100,14 @@ public class NpcHousing : MonoBehaviour, ISaveable
 
     private IEnumerator DeployWorkersRoutine()
     {
-        // Mevcut işçileri sırayla çıkar
         foreach (var worker in myWorkers)
         {
             if (!isRunning) yield break;
-
             if (!worker.gameObject.activeInHierarchy)
             {
                 worker.transform.position = GetSpawnPoint().position;
                 worker.gameObject.SetActive(true);
-                
-                // Reset
                 if (worker is IPooledNpc p) p.OnNpcSpawned();
-
                 SendWorkerToTask(worker);
             }
             yield return new WaitForSeconds(housingData.spawnInterval);
@@ -148,51 +122,40 @@ public class NpcHousing : MonoBehaviour, ISaveable
     }
 
     // --- UPGRADE SİSTEMİ ---
-
-    [ContextMenu("Upgrade Building")] // Test Butonu
+    [ContextMenu("Upgrade Building")]
     public void TryUpgrade()
     {
-        // 1. Kontroller
-        if (housingData == null || housingData.nextLevelData == null)
-        {
-            Debug.Log("Upgrade başarısız: Son seviye veya data eksik.");
-            return;
-        }
-        if (paymentSilo == null)
-        {
-            Debug.LogError("Upgrade başarısız: Ödeme Silosu atanmamış!");
-            return;
-        }
+        if (housingData == null || housingData.nextLevelData == null) return;
+        if (paymentSilo == null) return;
 
-        // 2. Bakiye Kontrolü
         foreach (var cost in housingData.upgradeCosts)
         {
-            if (paymentSilo.GetStoredAmount(cost.resource) < cost.amount)
-            {
-                Debug.Log($"Yetersiz Kaynak: {cost.resource.name}");
-                return;
-            }
+            if (paymentSilo.GetStoredAmount(cost.resource) < cost.amount) return;
         }
 
-        // 3. Ödeme Al
         foreach (var cost in housingData.upgradeCosts)
         {
             paymentSilo.TakeResource(cost.resource, cost.amount);
         }
 
-        // 4. Seviyeyi Uygula
         ApplyUpgradeData(housingData.nextLevelData);
         
         Debug.Log($"<color=green>UPGRADE BAŞARILI!</color> Yeni Seviye: {housingData.buildingName}");
+
+        if (SaveManager.Instance != null)
+        {
+            // DİKKAT: AutoSaveManager yerine direkt SaveManager'ı tetikliyoruz (Daha güvenli)
+            // Ama AutoSaveManager varsa onu kullanmak daha iyidir.
+             AutoSaveManager autoSave = FindObjectOfType<AutoSaveManager>();
+             if(autoSave != null) autoSave.TriggerAutoSave("Bina Yükseltildi");
+        }
     }
 
     private void ApplyUpgradeData(NpcHousingData newData)
     {
         this.housingData = newData;
         UpdateVisuals();
-        
-        // Yeni işçi gerekiyorsa ekle ve hemen sahaya sür
-        InitializeWorkforce(); 
+        InitializeWorkforce();
         if (isRunning) StartCoroutine(DeployWorkersRoutine());
     }
 
@@ -204,8 +167,7 @@ public class NpcHousing : MonoBehaviour, ISaveable
         }
     }
 
-    // --- İŞ MANTIĞI (CORE LOGIC) ---
-
+    // ... (Core Logic: Production, HandleNpc... metodları AYNEN KALSIN) ...
     private IEnumerator ProductionRoutine() {
         while (isRunning) { 
             if (inputRawMaterialCount >= housingData.conversionRate) {
@@ -221,7 +183,6 @@ public class NpcHousing : MonoBehaviour, ISaveable
             }
         }
     }
-
     private Transform DetermineWorkTarget() {
         if (jobType == NpcJobType.GatherResource && resourceTarget != null) 
             return (resourceTarget.interactionPoint != null) ? resourceTarget.interactionPoint : resourceTarget.transform;
@@ -229,14 +190,11 @@ public class NpcHousing : MonoBehaviour, ISaveable
             return houseTarget.GetSpawnPoint();
         return transform; 
     }
-
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc) {
         FriendlyNpcData data = npc.GetNpcData();
         if (data == null) { npc.ReturnHome(0, null); return; }
         int capacity = data.maxCarryCapacity; 
-        
-        if (jobType == NpcJobType.GatherResource) 
-            StartCoroutine(WorkCycle(npc, capacity, null)); 
+        if (jobType == NpcJobType.GatherResource) StartCoroutine(WorkCycle(npc, capacity, null)); 
         else if (jobType == NpcJobType.TransferResource) {
             int collected = 0; ResourceData resource = null;
             if (houseTarget != null) {
@@ -246,7 +204,6 @@ public class NpcHousing : MonoBehaviour, ISaveable
             npc.ReturnHome(collected, resource); 
         }
     }
-
     private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int amount, ResourceData resource) {
         if (amount > 0) {
             if (housingData.requiresConversion) inputRawMaterialCount += amount;
@@ -254,19 +211,15 @@ public class NpcHousing : MonoBehaviour, ISaveable
         }
         StartCoroutine(RestCycle(npc, housingData.restDuration));
     }
-
     private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity, ResourceData resource) {
         if (resourceTarget != null) resourceTarget.TriggerInteraction();
         yield return new WaitForSeconds(resourceTarget.workDuration);
         if(npc != null) npc.ReturnHome(capacity, resource);
     }
-
     private IEnumerator RestCycle(FriendlyNpcAI npc, float duration) {
         yield return new WaitForSeconds(duration);
         if(npc != null && isRunning) SendWorkerToTask(npc); 
     }
-
-    // --- HELPER METHODS ---
     public NpcHousingData GetHousingData() { return housingData; }
     public int GetResourceCount() { return outputProductCount; }
     public ResourceData GetProducedResource() { return housingData != null ? housingData.producedResource : null; }
@@ -279,21 +232,21 @@ public class NpcHousing : MonoBehaviour, ISaveable
         return actual;
     }
 
-    // --- SAVE SYSTEM ENTEGRASYONU ---
+    // --- SAVE SYSTEM ENTEGRASYONU (DÜZELTİLDİ) ---
     
     [System.Serializable]
     public class HousingSaveData
     {
-        public string levelDataName; // Hangi seviye verisi?
-        public int storedProduct;    // İçindeki ürün
-        public int storedRaw;        // İçindeki hammadde
+        public string dataID;
+        public int storedProduct;
+        public int storedRaw;
     }
 
     public object CaptureState()
     {
-        return new HousingSaveData
-        {
-            levelDataName = housingData.name,
+        return new HousingSaveData 
+        { 
+            dataID = housingData != null ? housingData.name : "",
             storedProduct = this.outputProductCount,
             storedRaw = this.inputRawMaterialCount
         };
@@ -301,26 +254,33 @@ public class NpcHousing : MonoBehaviour, ISaveable
 
     public void RestoreState(object state)
     {
-        string jsonString = state as string;
-        if (string.IsNullOrEmpty(jsonString)) return;
+        string json = state as string;
+        if (string.IsNullOrEmpty(json)) return;
 
-        HousingSaveData data = JsonUtility.FromJson<HousingSaveData>(jsonString);
+        HousingSaveData data = JsonUtility.FromJson<HousingSaveData>(json);
         if (data != null)
         {
-            // 1. Seviyeyi Geri Yükle
-            // Not: Data dosyaları "Resources" klasöründe olmalı!
-            if (!string.IsNullOrEmpty(data.levelDataName))
+            // 1. AKILLI DATA YÜKLEME (ResourceManager Kullanıyor)
+            if (!string.IsNullOrEmpty(data.dataID))
             {
-                NpcHousingData levelData = Resources.Load<NpcHousingData>(data.levelDataName);
-                if (levelData != null)
+                // ResourceManager nerede olursa olsun bulur
+                NpcHousingData loadedData = ResourceManager.LoadHousingData(data.dataID);
+                
+                if (loadedData != null)
                 {
-                    ApplyUpgradeData(levelData); // Görseli ve işçileri güncelle
+                    ApplyUpgradeData(loadedData);
+                    Debug.Log($"NpcHousing: '{loadedData.buildingName}' başarıyla yüklendi.");
                 }
             }
 
-            // 2. Stokları Geri Yükle
             this.outputProductCount = data.storedProduct;
             this.inputRawMaterialCount = data.storedRaw;
+            
+            // 2. Start'ın bunu ezmesini engelle
+            isDataRestored = true; 
+            
+            // Hemen başlat (Çünkü Start çalışmayabilir)
+            if (!isRunning) StartHousing();
         }
     }
 }

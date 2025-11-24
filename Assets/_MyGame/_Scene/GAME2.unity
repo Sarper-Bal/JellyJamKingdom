@@ -557,7 +557,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
   m_PrefabInstance: {fileID: 1308672606}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 521057222}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 868788f80070945db8c4789f6b657e37, type: 3}
@@ -7082,6 +7082,24 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 230502011}
   m_SourcePrefab: {fileID: 100100000, guid: 9eb8c709b68d643e0b724f2ebd6272d0, type: 3}
+--- !u!1 &521057222 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+  m_PrefabInstance: {fileID: 1308672606}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &521057223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 521057222}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbb9149cea7eb4801b32fc903d68c3d5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.SaveableEntity
+  uniqueID: 94179f79-15fe-49c8-ac91-770bd35ebf52
 --- !u!1001 &523912305
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16600,6 +16618,10 @@ PrefabInstance:
       propertyPath: housingData
       value: 
       objectReference: {fileID: 11400000, guid: b27cfb75666544831b166ccba8229d08, type: 2}
+    - target: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: paymentSilo
+      value: 
+      objectReference: {fileID: 863620436}
     - target: {fileID: 2473077610042384421, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       propertyPath: m_LocalPosition.x
       value: -6
@@ -16727,7 +16749,10 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6742896543979763599, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       insertIndex: 2
       addedObject: {fileID: 1983135252}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1604321835}
   m_SourcePrefab: {fileID: 100100000, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
 --- !u!1001 &1237561426
 PrefabInstance:
@@ -17716,6 +17741,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a10db24eab38e34bb3d625be632abe4, type: 3}
+--- !u!1 &1293865407 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+  m_PrefabInstance: {fileID: 1231189670}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1294307163
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -18164,7 +18194,10 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6742896543979763599, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       insertIndex: 1
       addedObject: {fileID: 1646020683}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2670980998615427932, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 521057223}
   m_SourcePrefab: {fileID: 100100000, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
 --- !u!4 &1321253577 stripped
 Transform:
@@ -21125,7 +21158,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
   m_PrefabInstance: {fileID: 1231189670}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1293865407}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 868788f80070945db8c4789f6b657e37, type: 3}
@@ -21136,6 +21169,19 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4588609894122845651, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
   m_PrefabInstance: {fileID: 1231189670}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1604321835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1293865407}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbb9149cea7eb4801b32fc903d68c3d5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IndianOceanAssets.Engine2_5D.SaveableEntity
+  uniqueID: a0beaf23-ac10-4fb7-9b49-7af6032856ea
 --- !u!4 &1606206248 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3096411534657123468, guid: 2a10db24eab38e34bb3d625be632abe4, type: 3}
