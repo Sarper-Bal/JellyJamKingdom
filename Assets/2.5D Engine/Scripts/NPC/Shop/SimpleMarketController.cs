@@ -1,8 +1,15 @@
+/*
+ * SIMPLE MARKET CONTROLLER - v3.0 (Bağımsız / Decentralized)
+ * DEĞİŞİKLİKLER:
+ * - NpcPooler bağımlılığı kaldırıldı.
+ * - Kendi özel işçisini (localWorker) Start'ta yaratır ve yönetir.
+ */
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq; 
-using IndianOceanAssets.Engine2_5D; // Save System için gerekli
+using IndianOceanAssets.Engine2_5D;
 
 public class SimpleMarketController : MonoBehaviour, ISaveable
 {
@@ -25,25 +32,20 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     // Runtime
     private SimpleCustomer[] currentCustomers;
     private bool isWorkerBusy = false;
-    private FriendlyNpcAI permanentWorker; 
     private List<ResourceData> possibleRequests;
     private bool isRunning = false; 
+    
+    // --- YEREL İŞÇİ ---
+    private FriendlyNpcAI localWorker; // Marketin tek işçisi
+    // ------------------
 
     private IEnumerator Start()
     {
-        // 1. NpcPooler'ın hazır olmasını bekle
-        yield return new WaitUntil(() => NpcPooler.Instance != null);
+        // Artık NpcPooler beklemiyoruz!
+        // Sadece CustomerPooler gerekiyorsa onu bekleyebilirsin ama şart değil.
+        yield return null; 
         
-        // 2. Market kurulumunu yap
         InitializeMarket();
-
-        // 3. Havuz Genişletme (YENİ: Eğer market sonradan eklendiyse havuzu büyüt)
-        if (NpcPooler.Instance != null)
-        {
-            NpcPooler.Instance.RecalculateAndExpandPools();
-        }
-
-        // 4. Market döngüsünü başlat
         StartMarketLoop();
     }
 
@@ -59,6 +61,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     {
         isRunning = false;
         StopAllCoroutines(); 
+        if (localWorker != null) localWorker.gameObject.SetActive(false);
     }
 
     private void InitializeMarket()
@@ -66,22 +69,34 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         if (marketData == null || queueSpots == null || queueSpots.Length == 0) return;
 
         possibleRequests = marketData.GetSellableResources();
-        
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         
-        // Müşteri havuzunu ayarla
+        // Müşteri Havuzu (CustomerPooler kalabilir, NpcPooler değil)
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
             CustomerPooler.Instance.RegisterPool(marketData.customerPrefab, queueSpots.Length + 2);
 
-        // Not: Worker (İşçi) havuzu artık NpcPooler.Recalculate... tarafından otomatik ayarlanıyor.
+        // --- YEREL İŞÇİYİ YARAT ---
+        if (marketData.workerPrefab != null)
+        {
+            GameObject workerObj = Instantiate(marketData.workerPrefab.gameObject, 
+                                             (workerSpawnPoint != null ? workerSpawnPoint.position : transform.position), 
+                                             Quaternion.identity, 
+                                             transform); // Marketin çocuğu yap
+            
+            localWorker = workerObj.GetComponent<FriendlyNpcAI>();
+            if (localWorker != null)
+            {
+                workerObj.SetActive(false); // Beklemede kalsın
+                
+                // Eventleri bağla
+                localWorker.OnArrivedAtWork += OnWorkerArrivedAtSilo;
+                localWorker.OnArrivedAtHome += OnWorkerReturnedToShop;
+            }
+        }
     }
 
-    // --- NPC Pooler'ın Veriye Erişmesi İçin ---
-    public SimpleMarketData GetMarketData()
-    {
-        return marketData;
-    }
-    // ------------------------------------------
+    // --- NPC Pooler İçin Getter GEREKSİZ KALDI (Silebiliriz) ---
+    // public SimpleMarketData GetMarketData() { return marketData; }
 
     private IEnumerator SpawnRoutine()
     {
@@ -127,54 +142,55 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         }
     }
     private void ManageWorkerLogic() {
-        if (isWorkerBusy || currentCustomers[0] == null || targetSilo == null) return;
+        if (isWorkerBusy || currentCustomers[0] == null || targetSilo == null || localWorker == null) return;
         ResourceData requestedRes = currentCustomers[0].RequestedResource;
         if (smartWaitMode && targetSilo.GetStoredAmount(requestedRes) < 1) return; 
         StartCoroutine(DispatchWorker());
     }
+    
+    // --- GÜNCELLENMİŞ İŞÇİ GÖNDERİMİ ---
     private IEnumerator DispatchWorker() {
         isWorkerBusy = true;
-        if (permanentWorker == null) {
+        
+        // İşçiyi aktifleştir
+        if (!localWorker.gameObject.activeInHierarchy)
+        {
             Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
-            Quaternion spawnRot = (workerSpawnPoint != null) ? workerSpawnPoint.rotation : Quaternion.identity;
-            permanentWorker = NpcPooler.Instance.SpawnFromPool(marketData.workerPoolTag, spawnPos, spawnRot);
+            localWorker.transform.position = spawnPos;
+            localWorker.gameObject.SetActive(true);
             
-            if (permanentWorker == null) { 
-                // Eğer havuzda eleman yoksa (NpcPooler hesaplayana kadar) işlemi iptal et
-                isWorkerBusy = false; 
-                yield break; 
-            }
-        } else {
-            if (!permanentWorker.gameObject.activeInHierarchy) permanentWorker.gameObject.SetActive(true);
+            // Reset
+            if (localWorker is IPooledNpc p) p.OnNpcSpawned();
         }
-        permanentWorker.OnArrivedAtWork -= OnWorkerArrivedAtSilo;
-        permanentWorker.OnArrivedAtHome -= OnWorkerReturnedToShop;
-        permanentWorker.OnArrivedAtWork += OnWorkerArrivedAtSilo;
-        permanentWorker.OnArrivedAtHome += OnWorkerReturnedToShop;
+
         Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform;
-        permanentWorker.Activate(marketData.workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
+        localWorker.Activate(marketData.workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
+        
         yield return null;
     }
+
     private void OnWorkerArrivedAtSilo(FriendlyNpcAI npc) {
         if (currentCustomers[0] == null) { npc.ReturnHome(0, null); return; }
         ResourceData requested = currentCustomers[0].RequestedResource;
         int taken = targetSilo.TakeResource(requested, 1);
         npc.ReturnHome(taken, requested);
     }
+
     private void OnWorkerReturnedToShop(FriendlyNpcAI npc, int amount, ResourceData resource) {
-        npc.OnArrivedAtWork -= OnWorkerArrivedAtSilo;
-        npc.OnArrivedAtHome -= OnWorkerReturnedToShop;
         isWorkerBusy = false;
+        
+        // İş bitince pasif yap (KeepActive kapalıysa)
         if (!keepWorkerActive) {
-            NpcPooler.Instance.ReturnToPool(marketData.workerPoolTag, npc);
-            permanentWorker = null; 
+            npc.gameObject.SetActive(false);
         }
+        
         if (amount > 0 && currentCustomers[0] != null) {
             CalculateEarnings(resource, amount);
             currentCustomers[0].LeaveHappy();
             currentCustomers[0] = null; 
         }
     }
+    
     private void CalculateEarnings(ResourceData soldItem, int quantity) {
         if (marketData.currencyResource == null) return;
         int price = marketData.GetPriceFor(soldItem);
@@ -186,7 +202,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
     }
     #endregion
 
-    // --- SAVE SYSTEM INTEGRATION ---
+    // --- SAVE SYSTEM ---
     public object CaptureState()
     {
         return new MarketSaveData { savedWalletAmount = this.accumulatedCurrency };
@@ -198,10 +214,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable
         if (!string.IsNullOrEmpty(jsonString))
         {
             MarketSaveData data = JsonUtility.FromJson<MarketSaveData>(jsonString);
-            if (data != null)
-            {
-                this.accumulatedCurrency = data.savedWalletAmount;
-            }
+            if (data != null) this.accumulatedCurrency = data.savedWalletAmount;
         }
     }
 }

@@ -1,3 +1,11 @@
+/*
+ * NPC HOUSING - v3.0 (Bağımsız / Decentralized)
+ * DEĞİŞİKLİKLER:
+ * - NpcPooler (Singleton) bağımlılığı tamamen kaldırıldı.
+ * - Her bina kendi işçisini (Prefab) kendi içinde üretir ve yönetir (Local Pooling).
+ * - İşçiler hiyerarşide binanın altında (Child) durur, bina silinirse işçiler de silinir.
+ */
+
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
@@ -7,53 +15,135 @@ public class NpcHousing : MonoBehaviour
     [Header("Veri")]
     [SerializeField] private NpcHousingData housingData;
     
+    [Header("Ayarlar")]
     [SerializeField] private NpcJobType jobType = NpcJobType.GatherResource; 
     [SerializeField] private WorkSpotInteractable resourceTarget;
-    [SerializeField] public NpcHousing houseTarget; 
+    [SerializeField] public NpcHousing houseTarget; // Transfer modu için hedef ev
     [SerializeField] private Transform spawnPoint; 
     [SerializeField] private NpcPath optionalNpcPath; 
+    
+    [Header("Durum")]
     [SerializeField] private int outputProductCount = 0; 
     [SerializeField] private int inputRawMaterialCount = 0;
     
-    private bool isProducing = false;
     public enum NpcJobType { GatherResource, TransferResource }
     public event System.Action<FriendlyNpcAI, NpcHousing> OnNpcReadyToWork;
-    private List<FriendlyNpcAI> managedNpcs = new List<FriendlyNpcAI>();
+    
+    // --- YEREL HAVUZ (LOCAL POOL) ---
+    // Bu bina kendi işçilerini bu listede tutar.
+    private List<FriendlyNpcAI> myWorkers = new List<FriendlyNpcAI>();
     
     private bool isRunning = false;
+    private bool isProducing = false;
 
- // Start yerine OnEnable kullanırsan, Inspector'da her açıp kapattığında çalışır.
     private void Start()
     {
-        if (housingData == null) return;
-        
-        // --- BURASI ÖNEMLİ: Pool Kontrolü ---
-        // Bina oyuna dahil olduğunda (veya aktifleştiğinde) havuza haber ver
-        if (NpcPooler.Instance != null)
+        if (housingData == null)
         {
-            NpcPooler.Instance.RecalculateAndExpandPools();
+            Debug.LogError($"NpcHousing: '{name}' objesinde Data eksik!");
+            return;
         }
-        // ------------------------------------
-
+        
+        // Başlangıçta kendi işgücünü kur
+        InitializeWorkforce();
+        
         StartHousing();
     }
-    // OnDestroy'da abonelikten çıkma işlemine gerek kalmadı.
+
+    /// <summary>
+    /// Binanın ihtiyaç duyduğu işçileri (Prefab'den) oluşturur ve saklar.
+    /// </summary>
+    private void InitializeWorkforce()
+    {
+        // Eğer Data'da prefab yoksa işlem yapma
+        if (housingData.genericNpcPrefab == null) return;
+
+        // İstenen sayı kadar üret
+        for (int i = 0; i < housingData.populationCount; i++)
+        {
+            CreateWorker();
+        }
+    }
+
+    private FriendlyNpcAI CreateWorker()
+    {
+        // İşçiyi bu binanın "Çocuğu" olarak üret (transform).
+        // Böylece bina silinirse işçiler de otomatik silinir.
+        GameObject workerObj = Instantiate(housingData.genericNpcPrefab, GetSpawnPoint().position, Quaternion.identity, transform);
+        
+        FriendlyNpcAI ai = workerObj.GetComponent<FriendlyNpcAI>();
+        if (ai != null)
+        {
+            // Başlangıçta pasif olsun, görev gelince açılır.
+            workerObj.SetActive(false);
+            myWorkers.Add(ai);
+            
+            // Event dinleyicilerini ayarla
+            ai.OnArrivedAtWork += HandleNpcArrivedAtWork;
+            ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
+        }
+        return ai;
+    }
 
     public void StartHousing()
     {
         if (isRunning) return;
         isRunning = true;
-        StartCoroutine(SpawnNpcs());
-        if (housingData.requiresConversion) StartCoroutine(ProductionRoutine());
+        
+        // İşçileri sahaya sür
+        StartCoroutine(DeployWorkersRoutine());
+        
+        if (housingData.requiresConversion) 
+            StartCoroutine(ProductionRoutine());
     }
 
     public void StopHousing()
     {
         isRunning = false;
         StopAllCoroutines();
+        
+        // Tüm işçileri eve çağır (Pasif yap)
+        foreach (var worker in myWorkers)
+        {
+            if (worker != null) worker.gameObject.SetActive(false);
+        }
     }
 
-    #region Core Logic (Unchanged)
+    private IEnumerator DeployWorkersRoutine()
+    {
+        foreach (var worker in myWorkers)
+        {
+            if (!isRunning) yield break;
+
+            // İşçiyi aktifleştir ve göreve gönder
+            if (!worker.gameObject.activeInHierarchy)
+            {
+                worker.transform.position = GetSpawnPoint().position;
+                worker.gameObject.SetActive(true);
+                
+                // Reset (Varsa IPooledNpc arayüzü ile)
+                if (worker is IPooledNpc p) p.OnNpcSpawned();
+
+                // İlk görevi ata
+                SendWorkerToTask(worker);
+            }
+            
+            // Hepsini aynı anda çıkarmamak için bekle
+            yield return new WaitForSeconds(housingData.spawnInterval);
+        }
+    }
+
+    private void SendWorkerToTask(FriendlyNpcAI ai)
+    {
+        OnNpcReadyToWork?.Invoke(ai, this);
+        Transform workTarget = DetermineWorkTarget();
+        
+        // Data'daki NpcData ayarlarını kullanarak işçiyi başlat
+        ai.Activate(housingData.npcDataToSpawn, GetSpawnPoint(), workTarget, optionalNpcPath); 
+    }
+
+    #region Core Logic (İş Mantığı)
+    
     private IEnumerator ProductionRoutine() {
         while (isRunning) { 
             if (inputRawMaterialCount >= housingData.conversionRate) {
@@ -69,36 +159,27 @@ public class NpcHousing : MonoBehaviour
             }
         }
     }
-    private IEnumerator SpawnNpcs() {
-        Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
-        Transform home = (spawnPoint != null) ? spawnPoint : transform;
-        string tag = housingData.genericNpcPrefab.name;
-        for (int i = 0; i < housingData.populationCount; i++) {
-            if(!isRunning) yield break; 
-            FriendlyNpcAI ai = NpcPooler.Instance.SpawnFromPool(tag, pos, Quaternion.identity);
-            if (ai != null) {
-                OnNpcReadyToWork?.Invoke(ai, this);
-                Transform work = DetermineWorkTarget();
-                ai.Activate(housingData.npcDataToSpawn, home, work, optionalNpcPath); 
-                ai.OnArrivedAtWork -= HandleNpcArrivedAtWork; ai.OnArrivedAtHome -= HandleNpcArrivedAtHome;
-                ai.OnArrivedAtWork += HandleNpcArrivedAtWork; ai.OnArrivedAtHome += HandleNpcArrivedAtHome;
-                managedNpcs.Add(ai);
-            }
-            yield return new WaitForSeconds(housingData.spawnInterval);
-        }
-    }
-    
+
     private Transform DetermineWorkTarget() {
-        if (jobType == NpcJobType.GatherResource && resourceTarget != null) return (resourceTarget.interactionPoint != null) ? resourceTarget.interactionPoint : resourceTarget.transform;
-        else if (jobType == NpcJobType.TransferResource && houseTarget != null) return houseTarget.GetSpawnPoint();
+        if (jobType == NpcJobType.GatherResource && resourceTarget != null) 
+            return (resourceTarget.interactionPoint != null) ? resourceTarget.interactionPoint : resourceTarget.transform;
+        else if (jobType == NpcJobType.TransferResource && houseTarget != null) 
+            return houseTarget.GetSpawnPoint();
         return transform; 
     }
+
     private void HandleNpcArrivedAtWork(FriendlyNpcAI npc) {
         FriendlyNpcData data = npc.GetNpcData();
         if (data == null) { npc.ReturnHome(0, null); return; }
+        
         int capacity = data.maxCarryCapacity; 
-        if (jobType == NpcJobType.GatherResource) StartCoroutine(WorkCycle(npc, capacity, null)); 
-        else if (jobType == NpcJobType.TransferResource) {
+        
+        if (jobType == NpcJobType.GatherResource) 
+        {
+            StartCoroutine(WorkCycle(npc, capacity, null)); 
+        }
+        else if (jobType == NpcJobType.TransferResource) 
+        {
             int collected = 0; ResourceData resource = null;
             if (houseTarget != null) {
                 collected = houseTarget.DecreaseCounter(capacity);
@@ -107,6 +188,7 @@ public class NpcHousing : MonoBehaviour
             npc.ReturnHome(collected, resource); 
         }
     }
+
     private void HandleNpcArrivedAtHome(FriendlyNpcAI npc, int amount, ResourceData resource) {
         if (amount > 0) {
             if (housingData.requiresConversion) inputRawMaterialCount += amount;
@@ -114,19 +196,24 @@ public class NpcHousing : MonoBehaviour
         }
         StartCoroutine(RestCycle(npc, housingData.restDuration));
     }
+
     private IEnumerator WorkCycle(FriendlyNpcAI npc, int capacity, ResourceData resource) {
         if (resourceTarget != null) resourceTarget.TriggerInteraction();
         yield return new WaitForSeconds(resourceTarget.workDuration);
         if(npc != null) npc.ReturnHome(capacity, resource);
     }
+
     private IEnumerator RestCycle(FriendlyNpcAI npc, float duration) {
+        // İşçi evde dinleniyor (Görünür kalabilir veya gizlenebilir, tasarım tercihi)
+        // Şimdilik evin önünde bekliyor.
         yield return new WaitForSeconds(duration);
+        
         if(npc != null && isRunning) { 
-            OnNpcReadyToWork?.Invoke(npc, this);
-            Transform newWork = DetermineWorkTarget();
-            npc.Activate(housingData.npcDataToSpawn, (spawnPoint != null ? spawnPoint : transform), newWork, optionalNpcPath);
+            SendWorkerToTask(npc); // Tekrar işe dön
         }
     }
+
+    // --- YARDIMCI METOTLAR ---
     public NpcHousingData GetHousingData() { return housingData; }
     public int GetResourceCount() { return outputProductCount; }
     public ResourceData GetProducedResource() { return housingData != null ? housingData.producedResource : null; }

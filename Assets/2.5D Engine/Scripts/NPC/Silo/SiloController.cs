@@ -1,18 +1,17 @@
 /*
- * SILO CONTROLLER - v2.0 (Save System Entegreli)
- * - 'ISaveable' arayüzü eklendi.
- * - Envanter verilerini JSON uyumlu formatta kaydedip yükleyebilir.
- * - ResourceData referanslarını "Resources.Load" ile tekrar bağlar.
+ * SILO CONTROLLER - v3.0 (Bağımsız / Decentralized)
+ * DEĞİŞİKLİKLER:
+ * - NpcPooler bağımlılığı kaldırıldı.
+ * - Kendi işçi havuzunu (myWorkers) yönetir.
+ * - 'ManageWorkforce' artık havuzdan çekmek yerine yerel listeden aktivasyon yapar.
  */
 
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using IndianOceanAssets.Engine2_5D; // ISaveable ve SaveData sınıfları için gerekli
+using IndianOceanAssets.Engine2_5D; // Save System ve ISaveable için
 
-// LINQ kullanmiyoruz, performans icin manuel dongu yapiyoruz.
-
-public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable eklendi
+public class SiloController : MonoBehaviour, ISaveable
 {
     [System.Serializable] public class SiloTargetData { public NpcHousing house; public NpcPath path; public int collectedAmount; }
     [System.Serializable] public class SiloInventoryEntry { public ResourceData resource; public int amount; }
@@ -26,28 +25,45 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
     [SerializeField] private List<SiloInventoryEntry> inventoryDisplay = new List<SiloInventoryEntry>();
     
     private Dictionary<ResourceData, int> siloInventory = new Dictionary<ResourceData, int>();
-    private List<FriendlyNpcAI> activeWorkers = new List<FriendlyNpcAI>();
+    
+    // --- YEREL HAVUZ ---
+    private List<FriendlyNpcAI> myWorkers = new List<FriendlyNpcAI>();
     private Dictionary<FriendlyNpcAI, SiloTargetData> workerAssignments = new Dictionary<FriendlyNpcAI, SiloTargetData>();
     
     private bool isRunning = false;
-
-  // ... (ISaveable ve değişkenler aynı) ...
 
     private void Start()
     {
         if (siloData == null) return;
 
-        // --- YENİ: Havuz Genişletme Tetikleyicisi ---
-        if (NpcPooler.Instance != null)
-        {
-            NpcPooler.Instance.RecalculateAndExpandPools();
-        }
-        // --------------------------------------------
-
+        // Kendi işçilerini hazırla
+        InitializeWorkforce();
+        
         StartSilo();
     }
-    
-    // ... (Geri kalan kodlar aynı) ...
+
+    // --- YENİ: İŞÇİLERİ OLUŞTUR ---
+    private void InitializeWorkforce()
+    {
+        if (siloData.genericNpcPrefab == null) return;
+
+        for (int i = 0; i < siloData.populationCount; i++)
+        {
+            // İşçiyi Silo'nun çocuğu olarak yarat
+            GameObject workerObj = Instantiate(siloData.genericNpcPrefab, GetSpawnPoint().position, Quaternion.identity, transform);
+            FriendlyNpcAI ai = workerObj.GetComponent<FriendlyNpcAI>();
+            
+            if (ai != null)
+            {
+                workerObj.SetActive(false); // Pasif bekle
+                myWorkers.Add(ai);
+                
+                // Eventleri bağla
+                ai.OnArrivedAtWork += HandleWorkerArrivedAtTarget;
+                ai.OnArrivedAtHome += HandleWorkerReturnedHome;
+            }
+        }
+    }
 
     public void StartSilo()
     {
@@ -60,6 +76,8 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
     {
         isRunning = false;
         StopAllCoroutines();
+        // Tüm işçileri durdur
+        foreach (var worker in myWorkers) worker.gameObject.SetActive(false);
     }
 
     private IEnumerator SmartMonitorRoutine()
@@ -74,34 +92,51 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
 
     #region Core Logic
     private int resourcesWaitingToBeCollected = 0;
+    
     private void CalculateAvailableResources() {
         resourcesWaitingToBeCollected = 0;
         if (targets == null) return;
         foreach (var t in targets) { if (t.house != null) resourcesWaitingToBeCollected += t.house.GetResourceCount(); }
     }
+
+    // --- YENİ: YEREL HAVUZ YÖNETİMİ ---
     private void ManageWorkforce() {
+        // 1. İhtiyacı hesapla
         int cap = siloData.npcDataToSpawn.maxCarryCapacity;
         int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
-        needed = Mathf.Clamp(needed, 0, siloData.populationCount);
-        int toSpawn = needed - activeWorkers.Count;
-        if (toSpawn > 0) StartCoroutine(SpawnBatch(toSpawn));
-    }
-    private IEnumerator SpawnBatch(int count) {
-        string tag = siloData.genericNpcPrefab.name;
-        Vector3 pos = (spawnPoint != null) ? spawnPoint.position : transform.position;
-        for (int i = 0; i < count; i++) {
-            FriendlyNpcAI npc = NpcPooler.Instance.SpawnFromPool(tag, pos, Quaternion.identity);
-            if (npc != null) {
-                activeWorkers.Add(npc);
-                npc.OnArrivedAtWork += HandleWorkerArrivedAtTarget;
-                npc.OnArrivedAtHome += HandleWorkerReturnedHome;
-                SendWorkerToBestTarget(npc);
+        needed = Mathf.Clamp(needed, 0, siloData.populationCount); // Maksimum kapasiteyi aşma
+
+        // 2. Şu an kaç kişi çalışıyor?
+        int currentActive = 0;
+        foreach (var worker in myWorkers) if (worker.gameObject.activeInHierarchy) currentActive++;
+
+        // 3. Eksik varsa tamamla
+        int toSpawn = needed - currentActive;
+        if (toSpawn > 0)
+        {
+            int spawned = 0;
+            foreach (var worker in myWorkers)
+            {
+                if (!worker.gameObject.activeInHierarchy && spawned < toSpawn)
+                {
+                    ActivateWorker(worker);
+                    spawned++;
+                }
             }
-            yield return new WaitForSeconds(0.2f);
         }
     }
+
+    private void ActivateWorker(FriendlyNpcAI npc)
+    {
+        Vector3 pos = GetSpawnPoint().position;
+        npc.transform.position = pos;
+        npc.gameObject.SetActive(true);
+        
+        if (npc is IPooledNpc p) p.OnNpcSpawned(); // Reset
+        
+        SendWorkerToBestTarget(npc);
+    }
     
-    // OPTIMIZE EDILMIS HEDEF BULMA (GC Allocation yok)
     private void SendWorkerToBestTarget(FriendlyNpcAI npc) {
         SiloTargetData best = null;
         int maxResources = -1;
@@ -122,14 +157,18 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
             }
         }
 
-        Transform dest; Transform home = (spawnPoint != null) ? spawnPoint : transform; NpcPath path = null;
+        Transform dest; Transform home = GetSpawnPoint(); NpcPath path = null;
         if (best != null) {
             dest = best.house.GetSpawnPoint(); path = best.path;
             if (!workerAssignments.ContainsKey(npc)) workerAssignments.Add(npc, best); else workerAssignments[npc] = best;
-        } else { RetireWorker(npc); return; }
+        } else { 
+            RetireWorker(npc); // İş yoksa emekli et (Pasif yap)
+            return; 
+        }
         npc.Activate(siloData.npcDataToSpawn, home, dest, path);
     }
 
+    // ... (Stok yönetimi ve Helper'lar AYNI) ...
     public void IncreaseCounter(ResourceData resource, int amount) {
         if (resource == null || amount <= 0) return;
         if (siloInventory.ContainsKey(resource)) siloInventory[resource] += amount;
@@ -153,6 +192,7 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
         inventoryDisplay.Clear();
         foreach (var kvp in siloInventory) inventoryDisplay.Add(new SiloInventoryEntry { resource = kvp.Key, amount = kvp.Value });
     }
+
     private void HandleWorkerArrivedAtTarget(FriendlyNpcAI npc) {
         SiloTargetData data = workerAssignments.ContainsKey(npc) ? workerAssignments[npc] : null;
         int collected = 0; ResourceData resource = null;
@@ -163,23 +203,38 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
         }
         npc.ReturnHome(collected, resource);
     }
+
     private void HandleWorkerReturnedHome(FriendlyNpcAI npc, int amount, ResourceData resource) {
         if (amount > 0 && resource != null) IncreaseCounter(resource, amount);
+        
+        // İş bitince tekrar değerlendir
         CalculateAvailableResources();
         int cap = siloData.npcDataToSpawn.maxCarryCapacity;
         int needed = Mathf.CeilToInt((float)resourcesWaitingToBeCollected / cap);
         needed = Mathf.Clamp(needed, 0, siloData.populationCount);
-        if (activeWorkers.Count > needed || resourcesWaitingToBeCollected == 0) RetireWorker(npc);
-        else StartCoroutine(RestAndRestart(npc));
+        
+        // Şu an çalışan sayısını bul
+        int activeCount = 0;
+        foreach(var w in myWorkers) if(w.gameObject.activeInHierarchy) activeCount++;
+
+        // Eğer çalışan sayısı ihtiyacı aştıysa veya iş kalmadıysa -> Emekli et
+        if (activeCount > needed || resourcesWaitingToBeCollected == 0) 
+        {
+            RetireWorker(npc);
+        }
+        else 
+        {
+            StartCoroutine(RestAndRestart(npc));
+        }
     }
+
+    // --- YENİ: YEREL EMEKLİLİK ---
     private void RetireWorker(FriendlyNpcAI npc) {
-        npc.OnArrivedAtWork -= HandleWorkerArrivedAtTarget;
-        npc.OnArrivedAtHome -= HandleWorkerReturnedHome;
-        activeWorkers.Remove(npc);
+        // NpcPooler.ReturnToPool yerine sadece pasif yapıyoruz.
+        npc.gameObject.SetActive(false);
         if (workerAssignments.ContainsKey(npc)) workerAssignments.Remove(npc);
-        string tag = siloData.genericNpcPrefab.name;
-        NpcPooler.Instance.ReturnToPool(tag, npc);
     }
+
     private IEnumerator RestAndRestart(FriendlyNpcAI npc) {
         yield return new WaitForSeconds(siloData.restDuration);
         if (npc.gameObject.activeInHierarchy) SendWorkerToBestTarget(npc);
@@ -187,13 +242,7 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
     public SiloData GetSiloData() { return siloData; }
     #endregion
 
-    // --- SAVE SYSTEM INTEGRATION ---
-    // Bu bölüm ISaveable arayüzü gerekliliklerini yerine getirir.
-    
-  // ... (Kodun üst kısımları aynı) ...
-
-    // --- SAVE SYSTEM ENTEGRASYONU (GÜNCELLENDİ) ---
-    
+    // --- SAVE SYSTEM INTEGRATION (ISaveable) ---
     public object CaptureState()
     {
         SiloSaveData data = new SiloSaveData();
@@ -212,26 +261,16 @@ public class SiloController : MonoBehaviour, ISaveable // <-- YENİ: ISaveable e
 
     public void RestoreState(object state)
     {
-        // 1. String'e çevir (JSON)
         string jsonString = state as string;
-        
         if (!string.IsNullOrEmpty(jsonString))
         {
-            // 2. JSON'dan Class'a çevir
             SiloSaveData data = JsonUtility.FromJson<SiloSaveData>(jsonString);
-            
             if (data == null) return;
-
             siloInventory.Clear();
-
             foreach (var entry in data.inventory)
             {
-                // Resources'dan yükle
                 ResourceData res = Resources.Load<ResourceData>(entry.resourceID);
-                if (res != null)
-                {
-                    siloInventory.Add(res, entry.amount);
-                }
+                if (res != null) siloInventory.Add(res, entry.amount);
             }
             UpdateInventoryDisplay(); 
         }
