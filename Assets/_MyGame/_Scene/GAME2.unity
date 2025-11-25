@@ -15414,7 +15414,7 @@ MonoBehaviour:
   playerInputHandler: {fileID: 1209706529}
   freeMoveSpeed: 20
   strategyStartPosition: {x: 0, y: 15, z: -10}
-  strategyStartRotation: {x: 30, y: 0, z: 0}
+  strategyStartRotation: {x: 30, y: 20, z: 0}
   mapMinBounds: {x: -12, y: -20}
   mapMaxBounds: {x: 50, y: 50}
 --- !u!114 &1167706491
@@ -15503,8 +15503,8 @@ Camera:
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 45
-  orthographic: 0
-  orthographic size: 5
+  orthographic: 1
+  orthographic size: 10
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
