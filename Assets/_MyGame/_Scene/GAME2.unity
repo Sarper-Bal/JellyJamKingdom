@@ -6688,6 +6688,10 @@ PrefabInstance:
       value: 2.7
       objectReference: {fileID: 0}
     - target: {fileID: 2328071306665436337, guid: c1b1b3afc561a4ed892c8f3074230b58, type: 3}
+      propertyPath: paymentSources.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328071306665436337, guid: c1b1b3afc561a4ed892c8f3074230b58, type: 3}
       propertyPath: targets.Array.data[1].path
       value: 
       objectReference: {fileID: 576769136}
@@ -6703,6 +6707,14 @@ PrefabInstance:
       propertyPath: targets.Array.data[1].house
       value: 
       objectReference: {fileID: 1604321833}
+    - target: {fileID: 2328071306665436337, guid: c1b1b3afc561a4ed892c8f3074230b58, type: 3}
+      propertyPath: 'paymentSources.Array.data[0]'
+      value: 
+      objectReference: {fileID: 32754680}
+    - target: {fileID: 2328071306665436337, guid: c1b1b3afc561a4ed892c8f3074230b58, type: 3}
+      propertyPath: 'paymentSources.Array.data[1]'
+      value: 
+      objectReference: {fileID: 598690867}
     - target: {fileID: 2328071306665436337, guid: c1b1b3afc561a4ed892c8f3074230b58, type: 3}
       propertyPath: inventoryDisplay.Array.data[0].resource
       value: 
@@ -18046,6 +18058,18 @@ PrefabInstance:
       propertyPath: paymentSilo
       value: 
       objectReference: {fileID: 863620436}
+    - target: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: paymentSources.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: 'paymentSources.Array.data[0]'
+      value: 
+      objectReference: {fileID: 32754680}
+    - target: {fileID: 931554012291273018, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
+      propertyPath: 'paymentSources.Array.data[1]'
+      value: 
+      objectReference: {fileID: 598690867}
     - target: {fileID: 1108996629134511513, guid: 6080106a484a34a90bf02efea9249b03, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0

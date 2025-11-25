@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: DefaultSimpleMarketData_2
   m_EditorClassIdentifier: Assembly-CSharp::SimpleMarketData
   buildingName: 
-  nextLevelData: {fileID: 11400000, guid: c855b82a8a3a54b05bbb6fff9ba49541, type: 2}
+  nextLevelData: {fileID: 0}
   upgradeCosts:
   - resource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
     amount: 1
@@ -23,9 +23,9 @@ MonoBehaviour:
   currencyResource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
   priceList:
   - itemToSell: {fileID: 11400000, guid: 1279879e028c94799a5ca18bf6d72dbe, type: 2}
-    pricePerUnit: 2
+    pricePerUnit: 4
   - itemToSell: {fileID: 11400000, guid: a04e2ae8716394e6b9e8b6057836179d, type: 2}
-    pricePerUnit: 1
+    pricePerUnit: 4
   customerPrefab: {fileID: -8451793211474312844, guid: decb02d5758994cdd83752712aa6ac38, type: 3}
   workerPrefab: {fileID: 584057605807608999, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
   workerData: {fileID: 11400000, guid: 46840630fa28f40c9a19b9588e996f08, type: 2}
