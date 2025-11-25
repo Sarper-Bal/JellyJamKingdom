@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Wood_House_2
   m_EditorClassIdentifier: Assembly-CSharp::NpcHousingData
   buildingName: Wood House
-  buildingSprite: {fileID: 0}
+  visualIndex: 1
   nextLevelData: {fileID: 11400000}
   upgradeCosts: []
   genericNpcPrefab: {fileID: 2150025513644625521, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
