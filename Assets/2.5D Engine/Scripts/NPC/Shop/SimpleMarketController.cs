@@ -1,11 +1,9 @@
 /*
- * SIMPLE MARKET CONTROLLER - FINAL (Full Features)
- * ÖZELLİKLER:
- * 1. Kuyruk Sistemi (Queue) korundu.
- * 2. En öndeki müşteri için 'İstek Balonu' (ShowRequestBubble) açılır.
- * 3. 'RegisterPool' hatası giderildi.
- * 4. Upgrade, Save ve Multi-Payment tam entegre.
- * 5. Yerel İşçi (Local Worker) sistemi aktif.
+ * SIMPLE MARKET CONTROLLER - FINAL (Delayed Rejection)
+ * YENİ ÖZELLİKLER:
+ * 1. [DELAY] Yasaklı ürün isteyen müşteri hemen gitmez, 'rejectionDuration' kadar bekler.
+ * 2. [VISUAL] Beklerken başındaki ikon kızarır ve sallanır.
+ * 3. [LOGIC] +0 yazısı anında çıkar, kuyruk süre bitince ilerler.
  */
 
 using System.Collections;
@@ -21,8 +19,20 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
 
     [Header("--- GÖRSEL & ÖDEME ---")]
     [SerializeField] private BuildingVisualController visualController;
-    [Tooltip("Upgrade maliyetinin ödeneceği kaynaklar.")]
     [SerializeField] private List<GameObject> paymentSources;
+
+    [Header("--- EFEKTLER ---")]
+    [SerializeField] private GameObject floatingTextPrefab;
+    [SerializeField] private Transform textSpawnPoint;
+    [SerializeField] private Color earningsTextColor = Color.yellow;
+    
+    // --- YENİ: REDDETME SÜRESİ ---
+    [Tooltip("Yasaklı ürün isteyen müşterinin ne kadar süre bekleyip gideceği.")]
+    [SerializeField] private float rejectionDuration = 1.5f;
+    // -----------------------------
+
+    [Header("--- YÖNETİM ---")]
+    [SerializeField] private List<ResourceData> blockedResources = new List<ResourceData>(); 
 
     [Header("--- MODLAR ---")]
     [SerializeField] private bool keepWorkerActive = true;
@@ -42,10 +52,13 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     private bool isWorkerBusy = false;
     private List<ResourceData> possibleRequests;
     private bool isRunning = false; 
-    
     private FriendlyNpcAI localWorker; 
     private bool isDataRestored = false;
     private List<IResourceProvider> _cachedProviders;
+    
+    // --- YENİ: REDDETME KİLİDİ ---
+    private bool isProcessingRejection = false; 
+    private bool isPoolRegistered = false;
 
     private IEnumerator Start()
     {
@@ -57,7 +70,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             yield break;
         }
 
-        UpdateVisuals(false); // Animasyonsuz başlangıç
+        UpdateVisuals(false);
         InitializeMarket();
         StartMarketLoop();
     }
@@ -101,14 +114,16 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         possibleRequests = marketData.GetSellableResources();
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         
-        // Müşteri Havuzu
-        if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
+        if (!isPoolRegistered && CustomerPooler.Instance != null && marketData.customerPrefab != null)
         {
             SimpleCustomer scPrefab = marketData.customerPrefab.GetComponent<SimpleCustomer>();
-            if (scPrefab != null) CustomerPooler.Instance.RegisterPool(scPrefab, queueSpots.Length + 2);
+            if (scPrefab != null)
+            {
+                CustomerPooler.Instance.RegisterPool(scPrefab, queueSpots.Length + 2);
+                isPoolRegistered = true; 
+            }
         }
 
-        // Yerel İşçi
         CreateOrUpdateWorker();
     }
 
@@ -134,8 +149,13 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         }
     }
 
-    // --- CORE LOGIC (KUYRUK VE GÖRSEL) ---
-    
+    public void ToggleProductSales(ResourceData resource, bool stopSelling)
+    {
+        if (stopSelling) { if (!blockedResources.Contains(resource)) blockedResources.Add(resource); }
+        else { if (blockedResources.Contains(resource)) blockedResources.Remove(resource); }
+    }
+
+    // --- CORE LOGIC ---
     private IEnumerator SpawnRoutine()
     {
         while (isRunning)
@@ -174,18 +194,12 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             newCustomer.Initialize(randomResource);
             currentCustomers[index] = newCustomer;
 
-            // --- YENİ: Eğer direkt 1. sıraya (index 0) geldiyse balonunu aç ---
-            if (index == 0)
-            {
-                newCustomer.ShowRequestBubble();
-            }
-            // -----------------------------------------------------------------
+            if (index == 0) newCustomer.ShowRequestBubble();
         }
     }
 
     private void ShiftQueue() 
     {
-        // Kuyruğu kaydır
         for (int i = 0; i < queueSpots.Length - 1; i++) 
         {
             if (currentCustomers[i] == null && currentCustomers[i + 1] != null) 
@@ -194,23 +208,53 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
                 currentCustomers[i + 1] = null; 
                 currentCustomers[i].MoveToSpot(queueSpots[i].position);
 
-                // --- YENİ: Yeni 1. sıraya geçenin balonunu aç ---
-                if (i == 0)
-                {
-                    currentCustomers[0].ShowRequestBubble();
-                }
-                // ------------------------------------------------
+                if (i == 0) currentCustomers[0].ShowRequestBubble();
             }
         }
     }
 
     private void ManageWorkerLogic() 
     {
-        if (isWorkerBusy || currentCustomers[0] == null || targetSilo == null || localWorker == null) return;
+        // Eğer işçi meşgulse VEYA şu an birini reddediyorsak işlem yapma
+        if (isWorkerBusy || isProcessingRejection || currentCustomers[0] == null || targetSilo == null || localWorker == null) return;
+        
         ResourceData requestedRes = currentCustomers[0].RequestedResource;
+
+        // --- YASAKLI ÜRÜN KONTROLÜ ---
+        if (blockedResources.Contains(requestedRes))
+        {
+            // Gecikmeli reddetme sürecini başlat
+            StartCoroutine(ProcessRejectionRoutine(currentCustomers[0], requestedRes));
+            return;
+        }
+        // -----------------------------
+
         if (smartWaitMode && targetSilo.GetStoredAmount(requestedRes) < 1) return; 
+        
         StartCoroutine(DispatchWorker());
     }
+
+    // --- YENİ: GECİKMELİ REDDETME COROUTINE ---
+    private IEnumerator ProcessRejectionRoutine(SimpleCustomer customer, ResourceData resource)
+    {
+        isProcessingRejection = true; // Sistemi kilitle
+
+        // 1. Görsel Tepki (Kızarma / Sallanma)
+        customer.PlayRejectionAnim();
+
+        // 2. +0 Yazısı Çıkar
+        CalculateEarnings(resource, 0); 
+
+        // 3. Bekle
+        yield return new WaitForSeconds(rejectionDuration);
+
+        // 4. Gönder
+        customer.LeaveHappy();
+        currentCustomers[0] = null;
+
+        isProcessingRejection = false; // Kilidi aç
+    }
+    // ------------------------------------------
 
     private IEnumerator DispatchWorker() 
     {
@@ -243,7 +287,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         }
         if (amount > 0 && currentCustomers[0] != null) {
             CalculateEarnings(resource, amount);
-            currentCustomers[0].LeaveHappy(); // Balon burada kapanır (SimpleCustomer içinde)
+            currentCustomers[0].LeaveHappy(); 
             currentCustomers[0] = null; 
         }
     }
@@ -251,16 +295,32 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     private void CalculateEarnings(ResourceData soldItem, int quantity) 
     {
         if (marketData.currencyResource == null) return;
+        
         int price = marketData.GetPriceFor(soldItem);
-        if (price > 0) {
-            int totalEarned = price * quantity;
+        int totalEarned = price * quantity;
+
+        if (totalEarned > 0)
+        {
             accumulatedCurrency += totalEarned;
             Debug.Log($"KAZANÇ: {quantity}x {soldItem.resourceName} -> {totalEarned}");
         }
+
+        if (floatingTextPrefab != null)
+        {
+            Vector3 spawnPos = (textSpawnPoint != null) ? textSpawnPoint.position : transform.position + Vector3.up * 2.0f;
+            GameObject popup = Instantiate(floatingTextPrefab, spawnPos, Quaternion.identity);
+            var ft = popup.GetComponent<FloatingText>();
+            
+            if (ft != null)
+            {
+                // 0 ise kırmızı, kazanç ise seçili renk
+                Color textColor = (totalEarned > 0) ? earningsTextColor : Color.red; 
+                ft.Init("+" + totalEarned, textColor); 
+            }
+        }
     }
 
-    // --- UPGRADE SİSTEMİ ---
-
+    // --- UPGRADE ---
     [ContextMenu("Upgrade Market")]
     public void TryUpgrade()
     {
@@ -312,26 +372,65 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     public int TakeResource(ResourceData resource, int amountToTake) { if (marketData != null && marketData.currencyResource == resource) { int actual = Mathf.Min(accumulatedCurrency, amountToTake); accumulatedCurrency -= actual; return actual; } return 0; }
 
     // --- SAVE SYSTEM ---
-    [System.Serializable] public class MarketSaveData { public string levelDataName; public int savedWalletAmount; }
-    public object CaptureState() { return new MarketSaveData { levelDataName = (marketData != null) ? marketData.name : "", savedWalletAmount = this.accumulatedCurrency }; }
-    public void RestoreState(object state) 
-    { 
-        string jsonString = state as string; 
-        if (!string.IsNullOrEmpty(jsonString)) 
-        { 
-            MarketSaveData data = JsonUtility.FromJson<MarketSaveData>(jsonString); 
-            if (data != null) 
-            { 
-                if (!string.IsNullOrEmpty(data.levelDataName)) 
-                { 
-                    SimpleMarketData loadedLevel = Resources.Load<SimpleMarketData>(data.levelDataName); 
-                    if (loadedLevel == null) { var all = Resources.LoadAll<SimpleMarketData>(""); foreach(var d in all) if(d.name == data.levelDataName) { loadedLevel = d; break; } }
-                    if (loadedLevel != null) { this.marketData = loadedLevel; UpdateVisuals(false); InitializeMarket(); } 
+    [System.Serializable]
+    public class MarketSaveData
+    {
+        public string levelDataName; 
+        public int savedWalletAmount;
+        public List<string> blockedResourceIDs;
+    }
+
+    public object CaptureState()
+    {
+        MarketSaveData data = new MarketSaveData
+        {
+            levelDataName = (marketData != null) ? marketData.name : "",
+            savedWalletAmount = this.accumulatedCurrency,
+            blockedResourceIDs = new List<string>()
+        };
+        foreach (var res in blockedResources) if (res != null) data.blockedResourceIDs.Add(res.name);
+        return data;
+    }
+
+    public void RestoreState(object state)
+    {
+        string jsonString = state as string;
+        if (!string.IsNullOrEmpty(jsonString))
+        {
+            MarketSaveData data = JsonUtility.FromJson<MarketSaveData>(jsonString);
+            if (data != null)
+            {
+                if (!string.IsNullOrEmpty(data.levelDataName))
+                {
+                    SimpleMarketData loadedLevel = Resources.Load<SimpleMarketData>(data.levelDataName);
+                    if (loadedLevel == null)
+                    {
+                        var all = Resources.LoadAll<SimpleMarketData>("");
+                        foreach(var d in all) if(d.name == data.levelDataName) { loadedLevel = d; break; }
+                    }
+                    if (loadedLevel != null) { this.marketData = loadedLevel; UpdateVisuals(false); InitializeMarket(); }
                 }
-                this.accumulatedCurrency = data.savedWalletAmount; 
-                isDataRestored = true; 
-                if (!isRunning) StartMarketLoop(); 
-            } 
-        } 
+
+                this.accumulatedCurrency = data.savedWalletAmount;
+
+                blockedResources.Clear();
+                if (data.blockedResourceIDs != null)
+                {
+                    foreach (string resName in data.blockedResourceIDs)
+                    {
+                        ResourceData res = Resources.Load<ResourceData>(resName);
+                        if (res == null)
+                        {
+                             var allRes = Resources.LoadAll<ResourceData>("");
+                             foreach(var r in allRes) if(r.name == resName) { res = r; break; }
+                        }
+                        if (res != null) blockedResources.Add(res);
+                    }
+                }
+                
+                isDataRestored = true;
+                if (!isRunning) StartMarketLoop();
+            }
+        }
     }
 }

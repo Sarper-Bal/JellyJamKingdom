@@ -1,9 +1,7 @@
 /*
- * SIMPLE CUSTOMER - FIXED (Scale Correction)
- * DÜZELTME:
- * - İstek balonunun boyutu artık sabit (1,1,1) olmaya zorlanmıyor.
- * - 'Awake' metodunda senin Inspector'da ayarladığın boyut (originalIconScale) kaydediliyor.
- * - Animasyon sırasında bu kaydedilen boyut kullanılıyor.
+ * SIMPLE CUSTOMER - FIXED (Rejection Visuals)
+ * EKLENEN:
+ * - 'PlayRejectionAnim': Müşteri reddedildiğinde balonunu sallar ve kırmızı yapar.
  */
 
 using UnityEngine;
@@ -12,33 +10,26 @@ using DG.Tweening;
 public class SimpleCustomer : MonoBehaviour, IPooledObject
 {
     [Header("Görsel Referanslar")]
-    [Tooltip("Müşterinin istediği ürünü gösterecek Sprite Renderer (Başının üstündeki).")]
+    [Tooltip("Müşterinin istediği ürünü gösterecek Sprite Renderer.")]
     [SerializeField] private SpriteRenderer requestIconRenderer;
 
     // Runtime
     public ResourceData RequestedResource { get; private set; }
     public string PoolTag { get; set; }
     
-    // --- YENİ: Orijinal Boyut Hafızası ---
     private Vector3 originalIconScale;
 
     private void Awake()
     {
-        // Oyun başında, senin ayarladığın boyutu kaydet
-        if (requestIconRenderer != null)
-        {
-            originalIconScale = requestIconRenderer.transform.localScale;
-        }
-        else
-        {
-            originalIconScale = Vector3.one; // Güvenlik
-        }
+        if (requestIconRenderer != null) originalIconScale = requestIconRenderer.transform.localScale;
+        else originalIconScale = Vector3.one;
     }
 
     public void OnObjectSpawn()
     {
-        // Havuzdan çıkarken balonu gizle
         HideRequestBubble();
+        // Rengi sıfırla (Eğer önceden kızardıysa)
+        if(requestIconRenderer != null) requestIconRenderer.color = Color.white;
     }
 
     public void Initialize(ResourceData resource)
@@ -47,31 +38,34 @@ public class SimpleCustomer : MonoBehaviour, IPooledObject
         HideRequestBubble();
     }
 
-    // --- İSTEK BALONU KONTROLÜ ---
     public void ShowRequestBubble()
     {
         if (requestIconRenderer == null || RequestedResource == null || RequestedResource.icon == null) return;
-
-        // Eğer zaten açıksa tekrar açma
         if (requestIconRenderer.gameObject.activeSelf) return;
 
         requestIconRenderer.sprite = RequestedResource.icon;
+        requestIconRenderer.color = Color.white; // Rengi beyaz yap
         requestIconRenderer.gameObject.SetActive(true);
 
-        // "Pop" Animasyonu
-        requestIconRenderer.transform.localScale = Vector3.zero; // 0'dan başla
-        
-        // --- DÜZELTME BURADA: Vector3.one yerine originalIconScale kullanıyoruz ---
+        requestIconRenderer.transform.localScale = Vector3.zero; 
         requestIconRenderer.transform.DOScale(originalIconScale, 0.3f).SetEase(Ease.OutBack);
-        // --------------------------------------------------------------------------
     }
 
-    public void HideRequestBubble()
+    // --- YENİ: REDDEDİLME ANİMASYONU ---
+    public void PlayRejectionAnim()
     {
         if (requestIconRenderer != null)
         {
-            requestIconRenderer.gameObject.SetActive(false);
+            // İkonu kırmızı yap ve sallar
+            requestIconRenderer.color = Color.red;
+            requestIconRenderer.transform.DOShakePosition(0.5f, 0.1f, 10, 90, false, true);
         }
+    }
+    // ------------------------------------
+
+    public void HideRequestBubble()
+    {
+        if (requestIconRenderer != null) requestIconRenderer.gameObject.SetActive(false);
     }
 
     public void MoveToSpot(Vector3 targetPos)
