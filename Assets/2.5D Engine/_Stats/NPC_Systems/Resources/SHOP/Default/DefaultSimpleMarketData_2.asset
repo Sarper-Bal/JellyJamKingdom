@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: DefaultSimpleMarketData_2
   m_EditorClassIdentifier: Assembly-CSharp::SimpleMarketData
   buildingName: 
+  visualIndex: 1
   nextLevelData: {fileID: 0}
   upgradeCosts:
   - resource: {fileID: 11400000, guid: beba0f154b895428c8712dfe4dda1f4c, type: 2}
