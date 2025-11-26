@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: DataSiloMain_2
   m_EditorClassIdentifier: Assembly-CSharp::SiloData
   buildingName: Silo
-  buildingSprite: {fileID: 0}
+  visualIndex: 1
   nextLevelData: {fileID: 0}
   upgradeCosts: []
   genericNpcPrefab: {fileID: 2150025513644625521, guid: 9c2df35d9b6704d03889bec196b76123, type: 3}
