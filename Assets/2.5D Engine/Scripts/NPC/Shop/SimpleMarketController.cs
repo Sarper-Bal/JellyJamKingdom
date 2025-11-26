@@ -1,10 +1,11 @@
 /*
- * SIMPLE MARKET CONTROLLER - FINAL (3D Visuals + Upgrade + Save)
+ * SIMPLE MARKET CONTROLLER - FINAL (Full Features)
  * ÖZELLİKLER:
- * 1. BuildingVisualController ile 3D model değişimi.
- * 2. Upgrade sistemi (Çoklu Kaynak Ödemeli).
- * 3. Save sistemi (Seviye ve Para).
- * 4. Mevcut kuyruk yapısı korundu.
+ * 1. Kuyruk Sistemi (Queue) korundu.
+ * 2. En öndeki müşteri için 'İstek Balonu' (ShowRequestBubble) açılır.
+ * 3. 'RegisterPool' hatası giderildi.
+ * 4. Upgrade, Save ve Multi-Payment tam entegre.
+ * 5. Yerel İşçi (Local Worker) sistemi aktif.
  */
 
 using System.Collections;
@@ -18,13 +19,10 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     [Header("--- VERİ KAYNAĞI ---")]
     [SerializeField] private SimpleMarketData marketData; 
 
-    // --- DEĞİŞİKLİK: 3D Görsel Yönetici ---
     [Header("--- GÖRSEL & ÖDEME ---")]
-    [SerializeField] private BuildingVisualController visualController; // <-- YENİ
-    
-    [Tooltip("Upgrade maliyetinin tahsil edileceği kaynaklar (Silo, Kendisi vb.).")]
+    [SerializeField] private BuildingVisualController visualController;
+    [Tooltip("Upgrade maliyetinin ödeneceği kaynaklar.")]
     [SerializeField] private List<GameObject> paymentSources;
-    // -------------------------------------
 
     [Header("--- MODLAR ---")]
     [SerializeField] private bool keepWorkerActive = true;
@@ -44,6 +42,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     private bool isWorkerBusy = false;
     private List<ResourceData> possibleRequests;
     private bool isRunning = false; 
+    
     private FriendlyNpcAI localWorker; 
     private bool isDataRestored = false;
     private List<IResourceProvider> _cachedProviders;
@@ -58,9 +57,7 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             yield break;
         }
 
-        // İlk Başlangıç: Animasyonsuz görsel güncelleme
-        UpdateVisuals(false);
-        
+        UpdateVisuals(false); // Animasyonsuz başlangıç
         InitializeMarket();
         StartMarketLoop();
     }
@@ -104,12 +101,14 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         possibleRequests = marketData.GetSellableResources();
         currentCustomers = new SimpleCustomer[queueSpots.Length];
         
+        // Müşteri Havuzu
         if (CustomerPooler.Instance != null && marketData.customerPrefab != null)
         {
             SimpleCustomer scPrefab = marketData.customerPrefab.GetComponent<SimpleCustomer>();
             if (scPrefab != null) CustomerPooler.Instance.RegisterPool(scPrefab, queueSpots.Length + 2);
         }
 
+        // Yerel İşçi
         CreateOrUpdateWorker();
     }
 
@@ -135,6 +134,131 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         }
     }
 
+    // --- CORE LOGIC (KUYRUK VE GÖRSEL) ---
+    
+    private IEnumerator SpawnRoutine()
+    {
+        while (isRunning)
+        {
+            TrySpawnCustomer();
+            yield return new WaitForSeconds(marketData.customerSpawnInterval);
+        }
+    }
+
+    private IEnumerator LogicRoutine()
+    {
+        while (isRunning)
+        {
+            ShiftQueue();
+            ManageWorkerLogic(); 
+            yield return new WaitForSeconds(0.5f);
+        }
+    }
+    
+    private void TrySpawnCustomer() 
+    {
+        int lastIndex = queueSpots.Length - 1;
+        if (currentCustomers[lastIndex] == null) SpawnCustomerAtSlot(lastIndex);
+    }
+
+    private void SpawnCustomerAtSlot(int index) 
+    {
+        if (possibleRequests == null || possibleRequests.Count == 0) return;
+        if (CustomerPooler.Instance == null) return;
+        
+        SimpleCustomer newCustomer = CustomerPooler.Instance.GetCustomer(queueSpots[index].position, Quaternion.identity);
+        
+        if (newCustomer != null) 
+        {
+            ResourceData randomResource = possibleRequests[Random.Range(0, possibleRequests.Count)];
+            newCustomer.Initialize(randomResource);
+            currentCustomers[index] = newCustomer;
+
+            // --- YENİ: Eğer direkt 1. sıraya (index 0) geldiyse balonunu aç ---
+            if (index == 0)
+            {
+                newCustomer.ShowRequestBubble();
+            }
+            // -----------------------------------------------------------------
+        }
+    }
+
+    private void ShiftQueue() 
+    {
+        // Kuyruğu kaydır
+        for (int i = 0; i < queueSpots.Length - 1; i++) 
+        {
+            if (currentCustomers[i] == null && currentCustomers[i + 1] != null) 
+            {
+                currentCustomers[i] = currentCustomers[i + 1];
+                currentCustomers[i + 1] = null; 
+                currentCustomers[i].MoveToSpot(queueSpots[i].position);
+
+                // --- YENİ: Yeni 1. sıraya geçenin balonunu aç ---
+                if (i == 0)
+                {
+                    currentCustomers[0].ShowRequestBubble();
+                }
+                // ------------------------------------------------
+            }
+        }
+    }
+
+    private void ManageWorkerLogic() 
+    {
+        if (isWorkerBusy || currentCustomers[0] == null || targetSilo == null || localWorker == null) return;
+        ResourceData requestedRes = currentCustomers[0].RequestedResource;
+        if (smartWaitMode && targetSilo.GetStoredAmount(requestedRes) < 1) return; 
+        StartCoroutine(DispatchWorker());
+    }
+
+    private IEnumerator DispatchWorker() 
+    {
+        isWorkerBusy = true;
+        if (!localWorker.gameObject.activeInHierarchy)
+        {
+            Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position;
+            localWorker.transform.position = spawnPos;
+            localWorker.gameObject.SetActive(true);
+            if (localWorker is IPooledNpc p) p.OnNpcSpawned();
+        }
+        Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform;
+        localWorker.Activate(marketData.workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath);
+        yield return null;
+    }
+
+    private void OnWorkerArrivedAtSilo(FriendlyNpcAI npc) 
+    {
+        if (currentCustomers[0] == null) { npc.ReturnHome(0, null); return; }
+        ResourceData requested = currentCustomers[0].RequestedResource;
+        int taken = targetSilo.TakeResource(requested, 1);
+        npc.ReturnHome(taken, requested);
+    }
+
+    private void OnWorkerReturnedToShop(FriendlyNpcAI npc, int amount, ResourceData resource) 
+    {
+        isWorkerBusy = false;
+        if (!keepWorkerActive) {
+            npc.gameObject.SetActive(false);
+        }
+        if (amount > 0 && currentCustomers[0] != null) {
+            CalculateEarnings(resource, amount);
+            currentCustomers[0].LeaveHappy(); // Balon burada kapanır (SimpleCustomer içinde)
+            currentCustomers[0] = null; 
+        }
+    }
+    
+    private void CalculateEarnings(ResourceData soldItem, int quantity) 
+    {
+        if (marketData.currencyResource == null) return;
+        int price = marketData.GetPriceFor(soldItem);
+        if (price > 0) {
+            int totalEarned = price * quantity;
+            accumulatedCurrency += totalEarned;
+            Debug.Log($"KAZANÇ: {quantity}x {soldItem.resourceName} -> {totalEarned}");
+        }
+    }
+
     // --- UPGRADE SİSTEMİ ---
 
     [ContextMenu("Upgrade Market")]
@@ -143,7 +267,6 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
         if (marketData == null || marketData.nextLevelData == null) return;
         if (_cachedProviders == null || _cachedProviders.Count == 0) InitializePaymentSources();
 
-        // 1. Kontrol
         foreach (var cost in marketData.upgradeCosts)
         {
             int totalAvailable = 0;
@@ -151,7 +274,6 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             if (totalAvailable < cost.amount) { Debug.Log("Yetersiz Kaynak"); return; }
         }
 
-        // 2. Ödeme
         foreach (var cost in marketData.upgradeCosts)
         {
             int remaining = cost.amount;
@@ -163,7 +285,6 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             }
         }
 
-        // 3. Uygula
         ApplyUpgradeData(marketData.nextLevelData);
         Debug.Log($"<color=green>MARKET UPGRADE!</color> Yeni Seviye: {marketData.buildingName}");
 
@@ -174,36 +295,23 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
     private void ApplyUpgradeData(SimpleMarketData newData)
     {
         this.marketData = newData;
-        UpdateVisuals(true); // Animasyonlu geçiş
+        UpdateVisuals(true);
         InitializeMarket(); 
     }
 
     private void UpdateVisuals(bool animate)
     {
-        // Görsel yöneticiye indeks gönder
         if (visualController != null && marketData != null)
         {
             visualController.SetVisualIndex(marketData.visualIndex, animate);
         }
     }
 
-    // --- CORE LOGIC (AYNEN KORUNDU) ---
-    private IEnumerator SpawnRoutine() { while (isRunning) { TrySpawnCustomer(); yield return new WaitForSeconds(marketData.customerSpawnInterval); } }
-    private IEnumerator LogicRoutine() { while (isRunning) { ShiftQueue(); ManageWorkerLogic(); yield return new WaitForSeconds(0.5f); } }
-    private void TrySpawnCustomer() { int lastIndex = queueSpots.Length - 1; if (currentCustomers[lastIndex] == null) SpawnCustomerAtSlot(lastIndex); }
-    private void SpawnCustomerAtSlot(int index) { if (possibleRequests == null || possibleRequests.Count == 0) return; if (CustomerPooler.Instance == null) return; SimpleCustomer newCustomer = CustomerPooler.Instance.GetCustomer(queueSpots[index].position, Quaternion.identity); if (newCustomer != null) { ResourceData randomResource = possibleRequests[Random.Range(0, possibleRequests.Count)]; newCustomer.Initialize(randomResource); currentCustomers[index] = newCustomer; } }
-    private void ShiftQueue() { for (int i = 0; i < queueSpots.Length - 1; i++) { if (currentCustomers[i] == null && currentCustomers[i + 1] != null) { currentCustomers[i] = currentCustomers[i + 1]; currentCustomers[i + 1] = null; currentCustomers[i].MoveToSpot(queueSpots[i].position); } } }
-    private void ManageWorkerLogic() { if (isWorkerBusy || currentCustomers[0] == null || targetSilo == null || localWorker == null) return; ResourceData requestedRes = currentCustomers[0].RequestedResource; if (smartWaitMode && targetSilo.GetStoredAmount(requestedRes) < 1) return; StartCoroutine(DispatchWorker()); }
-    private IEnumerator DispatchWorker() { isWorkerBusy = true; if (!localWorker.gameObject.activeInHierarchy) { Vector3 spawnPos = (workerSpawnPoint != null) ? workerSpawnPoint.position : transform.position; localWorker.transform.position = spawnPos; localWorker.gameObject.SetActive(true); if (localWorker is IPooledNpc p) p.OnNpcSpawned(); } Transform homePoint = (workerSpawnPoint != null) ? workerSpawnPoint : transform; localWorker.Activate(marketData.workerData, homePoint, targetSilo.GetSpawnPoint(), workerPath); yield return null; }
-    private void OnWorkerArrivedAtSilo(FriendlyNpcAI npc) { if (currentCustomers[0] == null) { npc.ReturnHome(0, null); return; } ResourceData requested = currentCustomers[0].RequestedResource; int taken = targetSilo.TakeResource(requested, 1); npc.ReturnHome(taken, requested); }
-    private void OnWorkerReturnedToShop(FriendlyNpcAI npc, int amount, ResourceData resource) { isWorkerBusy = false; if (!keepWorkerActive) { npc.gameObject.SetActive(false); } if (amount > 0 && currentCustomers[0] != null) { CalculateEarnings(resource, amount); currentCustomers[0].LeaveHappy(); currentCustomers[0] = null; } }
-    private void CalculateEarnings(ResourceData soldItem, int quantity) { if (marketData.currencyResource == null) return; int price = marketData.GetPriceFor(soldItem); if (price > 0) { int totalEarned = price * quantity; accumulatedCurrency += totalEarned; Debug.Log($"KAZANÇ: {quantity}x {soldItem.resourceName} -> {totalEarned}"); } }
-
     // --- IResourceProvider ---
     public int GetStoredAmount(ResourceData resource) { if (marketData != null && marketData.currencyResource == resource) return accumulatedCurrency; return 0; }
     public int TakeResource(ResourceData resource, int amountToTake) { if (marketData != null && marketData.currencyResource == resource) { int actual = Mathf.Min(accumulatedCurrency, amountToTake); accumulatedCurrency -= actual; return actual; } return 0; }
 
-    // --- SAVE SYSTEM (Akıllı Yükleme) ---
+    // --- SAVE SYSTEM ---
     [System.Serializable] public class MarketSaveData { public string levelDataName; public int savedWalletAmount; }
     public object CaptureState() { return new MarketSaveData { levelDataName = (marketData != null) ? marketData.name : "", savedWalletAmount = this.accumulatedCurrency }; }
     public void RestoreState(object state) 
@@ -216,16 +324,9 @@ public class SimpleMarketController : MonoBehaviour, ISaveable, IResourceProvide
             { 
                 if (!string.IsNullOrEmpty(data.levelDataName)) 
                 { 
-                    // Akıllı Yükleme
                     SimpleMarketData loadedLevel = Resources.Load<SimpleMarketData>(data.levelDataName); 
                     if (loadedLevel == null) { var all = Resources.LoadAll<SimpleMarketData>(""); foreach(var d in all) if(d.name == data.levelDataName) { loadedLevel = d; break; } }
-                    if (loadedLevel != null) 
-                    {
-                        this.marketData = loadedLevel;
-                        // YÜKLEME ANI: Animasyonsuz (False)
-                        UpdateVisuals(false);
-                        InitializeMarket();
-                    } 
+                    if (loadedLevel != null) { this.marketData = loadedLevel; UpdateVisuals(false); InitializeMarket(); } 
                 }
                 this.accumulatedCurrency = data.savedWalletAmount; 
                 isDataRestored = true; 

@@ -13,4 +13,4 @@ MonoBehaviour:
   m_Name: Breath
   m_EditorClassIdentifier: Assembly-CSharp::ResourceData
   resourceName: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: e93e3daabe0e02f4ca040424166112cb, type: 3}

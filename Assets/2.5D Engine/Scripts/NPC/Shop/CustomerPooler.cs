@@ -1,3 +1,10 @@
+/*
+ * CUSTOMER POOLER - FIXED (Method Name Mismatch Resolved)
+ * DÜZELTME:
+ * - 'OnSpawnFromPool()' çağrısı 'OnObjectSpawn()' olarak düzeltildi.
+ * - SimpleCustomer ve IPooledObject arayüzü ile uyumlu hale getirildi.
+ */
+
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,6 +25,7 @@ public class CustomerPooler : MonoBehaviour
     public void RegisterPool(SimpleCustomer prefab, int quantity)
     {
         if (prefab == null) return;
+        // Yedek prefab'i sakla (Havuz biterse üretmek için)
         if (backupPrefab == null) backupPrefab = prefab;
 
         for (int i = 0; i < quantity; i++) CreateAndEnqueue(prefab);
@@ -35,15 +43,26 @@ public class CustomerPooler : MonoBehaviour
     {
         if (poolQueue.Count == 0)
         {
-            if (backupPrefab != null) CreateAndEnqueue(backupPrefab);
-            else return null;
+            if (backupPrefab != null)
+            {
+                // Havuz boşsa yenisini yarat
+                CreateAndEnqueue(backupPrefab);
+            }
+            else
+            {
+                return null;
+            }
         }
 
         SimpleCustomer customer = poolQueue.Dequeue();
         customer.transform.position = position;
         customer.transform.rotation = rotation;
         customer.gameObject.SetActive(true);
-        customer.OnSpawnFromPool();
+        
+        // --- DÜZELTME BURADA ---
+        customer.OnObjectSpawn(); // 'OnSpawnFromPool' yerine doğrusu bu.
+        // -----------------------
+        
         return customer;
     }
 

@@ -1,55 +1,87 @@
+/*
+ * SIMPLE CUSTOMER - FIXED (Scale Correction)
+ * DÜZELTME:
+ * - İstek balonunun boyutu artık sabit (1,1,1) olmaya zorlanmıyor.
+ * - 'Awake' metodunda senin Inspector'da ayarladığın boyut (originalIconScale) kaydediliyor.
+ * - Animasyon sırasında bu kaydedilen boyut kullanılıyor.
+ */
+
 using UnityEngine;
-using DG.Tweening;
+using DG.Tweening; 
 
-public class SimpleCustomer : MonoBehaviour
+public class SimpleCustomer : MonoBehaviour, IPooledObject
 {
-    [Header("Görsel Ayarlar")]
-    [SerializeField] private SpriteRenderer resourceIconRenderer;
-    [SerializeField] private float appearDuration = 0.5f;
+    [Header("Görsel Referanslar")]
+    [Tooltip("Müşterinin istediği ürünü gösterecek Sprite Renderer (Başının üstündeki).")]
+    [SerializeField] private SpriteRenderer requestIconRenderer;
 
+    // Runtime
     public ResourceData RequestedResource { get; private set; }
+    public string PoolTag { get; set; }
+    
+    // --- YENİ: Orijinal Boyut Hafızası ---
+    private Vector3 originalIconScale;
 
-    public void OnSpawnFromPool()
+    private void Awake()
     {
-        transform.localScale = Vector3.zero;
-        transform.DOKill();
-        if(resourceIconRenderer) resourceIconRenderer.transform.DOKill();
-    }
-
-    public void Initialize(ResourceData resourceRequest)
-    {
-        RequestedResource = resourceRequest;
-        if (resourceIconRenderer != null && resourceRequest.icon != null)
+        // Oyun başında, senin ayarladığın boyutu kaydet
+        if (requestIconRenderer != null)
         {
-            resourceIconRenderer.sprite = resourceRequest.icon;
-            resourceIconRenderer.gameObject.SetActive(true);
-            resourceIconRenderer.transform.localScale = Vector3.zero;
-            resourceIconRenderer.transform.DOScale(1f, 0.3f).SetDelay(appearDuration);
+            originalIconScale = requestIconRenderer.transform.localScale;
         }
-        transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutBack);
+        else
+        {
+            originalIconScale = Vector3.one; // Güvenlik
+        }
     }
 
-    public void MoveToSpot(Vector3 targetPosition)
+    public void OnObjectSpawn()
     {
-        transform.DOJump(targetPosition, 0.5f, 1, 0.5f).SetEase(Ease.OutQuad);
+        // Havuzdan çıkarken balonu gizle
+        HideRequestBubble();
+    }
+
+    public void Initialize(ResourceData resource)
+    {
+        RequestedResource = resource;
+        HideRequestBubble();
+    }
+
+    // --- İSTEK BALONU KONTROLÜ ---
+    public void ShowRequestBubble()
+    {
+        if (requestIconRenderer == null || RequestedResource == null || RequestedResource.icon == null) return;
+
+        // Eğer zaten açıksa tekrar açma
+        if (requestIconRenderer.gameObject.activeSelf) return;
+
+        requestIconRenderer.sprite = RequestedResource.icon;
+        requestIconRenderer.gameObject.SetActive(true);
+
+        // "Pop" Animasyonu
+        requestIconRenderer.transform.localScale = Vector3.zero; // 0'dan başla
+        
+        // --- DÜZELTME BURADA: Vector3.one yerine originalIconScale kullanıyoruz ---
+        requestIconRenderer.transform.DOScale(originalIconScale, 0.3f).SetEase(Ease.OutBack);
+        // --------------------------------------------------------------------------
+    }
+
+    public void HideRequestBubble()
+    {
+        if (requestIconRenderer != null)
+        {
+            requestIconRenderer.gameObject.SetActive(false);
+        }
+    }
+
+    public void MoveToSpot(Vector3 targetPos)
+    {
+        transform.DOMove(targetPos, 1.0f).SetEase(Ease.Linear);
     }
 
     public void LeaveHappy()
     {
-        if(resourceIconRenderer) resourceIconRenderer.gameObject.SetActive(false);
-        transform.DOJump(transform.position, 1f, 1, 0.5f).OnComplete(() =>
-        {
-            transform.DOScale(Vector3.zero, 0.2f).OnComplete(() =>
-            {
-                ReturnSelfToPool();
-            });
-        });
-    }
-
-    private void ReturnSelfToPool()
-    {
-        transform.DOKill();
-        if (CustomerPooler.Instance != null) CustomerPooler.Instance.ReturnCustomer(this);
-        else Destroy(gameObject);
+        HideRequestBubble();
+        gameObject.SetActive(false);
     }
 }
